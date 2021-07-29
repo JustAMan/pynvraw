@@ -66,16 +66,11 @@ class NV_GPU_THERMAL_EX(NvVersioned):
     _pack_ = 1
     _fields_ = [('version', ctypes.c_uint32),
                 ('mask', ctypes.c_uint32),
-                ('pad1', ctypes.c_int8 * 33),
-                ('_hotspot', ctypes.c_int32 * 8),
-                ('_vram', ctypes.c_int32 * 2),
-                ('pad2', ctypes.c_int8 * 87)]
+                ('pad', ctypes.c_uint32 * 8),
+                ('_sensors', ctypes.c_uint32 * 32)]
     @property
-    def hotspot(self):
-        return [ctypes.cast(ctypes.pointer(ctypes.c_int(x)), ctypes.POINTER(ctypes.c_int8)).contents.value for x in self._hotspot]
-    @property
-    def vram(self):
-        return [ctypes.cast(ctypes.pointer(ctypes.c_int(x)), ctypes.POINTER(ctypes.c_int8)).contents.value for x in self._vram]
+    def sensors(self):
+        return tuple(x / 256.0 for x in self._sensors)
 
 class _NvCoolerLevel(ctypes.Structure):
     _pack_ = 1
@@ -290,11 +285,12 @@ class NvAPI:
                 return gpu
         raise ValueError(f'Cannot find a GPU with bus={busId} and slot={slotId}')    
 
-    def get_temps_ex(self, dev: NvPhysicalGpu) -> typing.Tuple[int, int]:
+    def get_temps_ex(self, dev: NvPhysicalGpu, sensor_hint=None) -> typing.Tuple[int, typing.Tuple[float]]:
         exc = None
-        for bitsize in range(10, 0, -1):
+        counts = [sensor_hint] if sensor_hint is not None else range(32, 1, -1)
+        for count in counts:
             thermal = NV_GPU_THERMAL_EX()
-            thermal.mask = (1 << bitsize) - 1
+            thermal.mask = (1 << count) - 1
             try:
                 self.NvAPI_GPU_GetAllTempsEx(dev, ctypes.pointer(thermal))
             except NvError as ex:
@@ -303,15 +299,7 @@ class NvAPI:
             break
         else:
             raise exc
-
-        hotspot = max(thermal.hotspot)
-        if bitsize > 9:
-            vram = max(thermal.vram)
-        elif bitsize > 8:
-            vram = thermal.vram[0]
-        else:
-            vram = None
-        return hotspot, vram
+        return count, thermal.sensors
 
     def set_cooler_duty(self, dev: NvPhysicalGpu, cooler: int, duty: int):
         duty = max(min(duty, 100), 0)

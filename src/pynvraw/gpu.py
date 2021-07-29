@@ -33,38 +33,32 @@ class Gpu:
         self.handle = handle
         self.api = api
         self.__name = None
+        self.__sensor_hint = None
+
+    def _get_temp(self, *indices):
+        try:
+            self.__sensor_hint, sensors = self.api.get_temps_ex(self.handle, self.__sensor_hint)
+        except NvError as ex:
+            if ex.status == 'NVAPI_NOT_SUPPORTED':
+                return None
+            raise
+        return tuple(sensors[idx] if idx < self.__sensor_hint else None for idx in indices)
 
     @property
-    def core_temp(self) -> int:
+    def core_temp(self) -> typing.Union[float, None]:
         '''Reads gpu core thermal sensor in Celsius.'''
-        thermal = NV_GPU_THERMAL_SETTINGS()
-        self.api.NvAPI_GPU_GetThermalSettings(self.handle, NVAPI_THERMAL_TARGET_ALL, ctypes.pointer(thermal))
-        for sensor in thermal.sensor:
-            if sensor.target == NVAPI_THERMAL_TARGET_GPU:
-                return sensor.currentTemp
-        raise ValueError('Cannot find gpu temperature sensor')
-    
-    @property
-    def hotspot_temp(self) -> typing.Union[int, None]:
-        '''Reads hotspot thermal sensor in Celsius if present, None otherwise.'''
-        try:
-            hotspot, _ = self.api.get_temps_ex(self.handle)
-            return hotspot
-        except NvError as ex:
-            if ex.status == 'NVAPI_NOT_SUPPORTED':
-                return None
-            raise
+        return self._get_temp(0)[0]
 
     @property
-    def vram_temp(self) -> typing.Union[int, None]:
+    def hotspot_temp(self) -> typing.Union[float, None]:
+        '''Reads hotspot thermal sensor in Celsius if present, None otherwise.'''
+        return self._get_temp(1)[0]
+
+    @property
+    def vram_temp(self) -> typing.Union[float, None]:
         '''Reads memory thermal sensor in Celsius if present, None otherwise.'''
-        try:
-            _, vram = self.api.get_temps_ex(self.handle)
-            return vram
-        except NvError as ex:
-            if ex.status == 'NVAPI_NOT_SUPPORTED':
-                return None
-            raise
+        candidates = [c for c in self._get_temp(9, 10) if c is not None]
+        return max(candidates) if candidates else None
 
     @property
     def name(self) -> str:
