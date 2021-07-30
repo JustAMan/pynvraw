@@ -165,6 +165,7 @@ class Gpu:
     def power(self) -> float:
         '''Reads current power consumption in %.'''
         status = self.api.get_topology_status(self.handle)
-        if status.count == 0:
-            return None
-        return status.unknown[2] / 1000
+        for entry in status.entries[:status.count]:
+            if entry.domain == 0: # GPU consumption
+                return entry.power
+        return None

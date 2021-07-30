@@ -36,6 +36,8 @@ NVAPI_MAX_GPU_PSTATE20_PSTATES = 16
 NVAPI_MAX_GPU_PSTATE20_CLOCKS = 8
 NVAPI_MAX_GPU_PSTATE20_BASE_VOLTAGES = 4
 
+NVAPI_MAX_GPU_TOPOLOGY_ENTRIES = 4
+
 NvAPI_ShortString = ctypes.c_char * NVAPI_SHORT_STRING_MAX
 
 class NvPhysicalGpu(ctypes.Structure):
@@ -203,11 +205,20 @@ class NV_GPU_POWER_STATUS(NvVersioned):
                 ('count', ctypes.c_uint32),
                 ('entries', _NV_GPU_POWER_STATUS_ENTRY * 4)]
 
+class NV_GPU_TOPOLOGY_ENTRY(ctypes.Structure):
+    _fields_ = [('domain', ctypes.c_int),
+                ('unknown1', ctypes.c_int),
+                ('_power', ctypes.c_uint32),
+                ('unknown2', ctypes.c_int)]
+    @property
+    def power(self) -> float:
+        return self._power / 1000.0
+
 class NV_GPU_TOPOLOGY_STATUS(NvVersioned):
     _nv_version_ = 1
     _fields_ = [('version', ctypes.c_uint32),
                 ('count', ctypes.c_uint32),
-                ('unknown', ctypes.c_uint32 * 16)]
+                ('entries', NV_GPU_TOPOLOGY_ENTRY * NVAPI_MAX_GPU_TOPOLOGY_ENTRIES)]
 
 class Method:
     def __init__(self, offset, restype, *argtypes):
@@ -265,7 +276,7 @@ class NvAPI:
         self.NvAPI_Unload()
 
     @property
-    def gpus(self) -> typing.List[NvPhysicalGpu]:
+    def gpu_handles(self) -> typing.List[NvPhysicalGpu]:
         if self.__gpus is None:
             gpus = NV_ENUM_GPUS()
             gpuCount = ctypes.c_int(-1)
@@ -275,7 +286,7 @@ class NvAPI:
 
 
     def get_gpu_by_bus(self, busId: int, slotId: int) -> NvPhysicalGpu:
-        for gpu in self.gpus:
+        for gpu in self.gpu_handles:
             devBusId = ctypes.c_uint32(0)
             devSlotId = ctypes.c_uint32(0)
             self.NvAPI_GPU_GetBusId(gpu, ctypes.pointer(devBusId))

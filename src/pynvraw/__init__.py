@@ -12,11 +12,11 @@ def get_phys_gpu(cuda_dev: int) -> Gpu:
 
     return Gpu(api.get_gpu_by_bus(busId, slotId), api)
 
-def gpus():
+def get_gpus():
     try:
-        return gpus._gpu_cache
+        return get_gpus._gpu_cache
     except AttributeError:
-        gpus._gpu_cache = tuple(Gpu(g, api) for g in api.gpus)
-        return gpus._gpu_cache
+        get_gpus._gpu_cache = tuple(Gpu(g, api) for g in api.gpu_handles)
+        return get_gpus._gpu_cache
 
-__all__ = ['api', 'Gpu', 'Clocks', 'NvError', 'NvStatus', 'get_phys_gpu', 'gpus']
+__all__ = ['api', 'Gpu', 'Clocks', 'NvError', 'NvStatus', 'get_phys_gpu', 'get_gpus']
