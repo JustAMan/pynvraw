@@ -220,6 +220,99 @@ class NV_GPU_TOPOLOGY_STATUS(NvVersioned):
                 ('count', ctypes.c_uint32),
                 ('entries', NV_GPU_TOPOLOGY_ENTRY * NVAPI_MAX_GPU_TOPOLOGY_ENTRIES)]
 
+class NV_DETAILED_POWER_TOPOLOGY(NvVersioned):
+    class NV_DETAILED_POWER_TOPOLOGY_ENTRY(ctypes.Structure):
+        _fields_ = [('type', ctypes.c_uint32),
+                    ('_rail', ctypes.c_uint32),
+                    ('unknown', ctypes.c_uint32 * 13)]
+        RAILS = {
+            1: 'OUT_NVVDD',
+            2: 'OUT_FBVDD',
+            3: 'OUT_FBVDDQ',
+            4: 'OUT_FBVDD_Q',
+            5: 'OUT_PEXVDD',
+            6: 'OUT_A3V3',
+            7: 'OUT_3V3NV',
+            8: 'OUT_TOTAL_GPU',
+            9: 'OUT_FBVDDQ_GPU',
+            10: 'OUT_FBVDDQ_MEM',
+            11: 'OUT_SRAM',
+            222: 'IN_PEX12V1',
+            223: 'IN_TOTAL_BOARD2',
+            224: 'IN_HIGH_VOLT0',
+            225: 'IN_HIGH_VOLT1',
+            226: 'IN_NVVDD1',
+            227: 'IN_NVVDD2',
+            228: 'IN_EXT12V_8PIN2',
+            229: 'IN_EXT12V_8PIN3',
+            230: 'IN_EXT12V_8PIN4',
+            231: 'IN_EXT12V_8PIN5',
+            232: 'IN_MISC0',
+            233: 'IN_MISC1',
+            234: 'IN_MISC2',
+            235: 'IN_MISC3',
+            236: 'IN_USBC0',
+            237: 'IN_USBC1',
+            238: 'IN_FAN0',
+            239: 'IN_FAN1',
+            240: 'IN_SRAM',
+            241: 'IN_PWR_SRC_PP',
+            242: 'IN_3V3_PP',
+            243: 'IN_3V3_MAIN',
+            244: 'IN_3V3_AON',
+            245: 'IN_TOTAL_BOARD',
+            246: 'IN_NVVDD',
+            247: 'IN_FBVDD',
+            248: 'IN_FBVDDQ',
+            249: 'IN_FBVDD_Q',
+            250: 'IN_EXT12V_8PIN0',
+            251: 'IN_EXT12V_8PIN1',
+            252: 'IN_EXT12V_6PIN0',
+            253: 'IN_EXT12V_6PIN1',
+            254: 'IN_PEX3V3',
+            255: 'IN_PEX12V'
+        }
+        @property
+        def rail(self):
+            return self.RAILS.get(self._rail, str(self._rail))
+
+    _nv_version_ = 1
+    # check: version == 0x10AA8
+    _fields_ = [('version', ctypes.c_uint32),
+                ('something', ctypes.c_uint32), # must be !=0, maybe count?..
+                ('unknown1', ctypes.c_uint32 * 2),
+                ('selector', ctypes.c_uint32),
+                ('unknown2', ctypes.c_uint32 * 8),
+                ('entries', NV_DETAILED_POWER_TOPOLOGY_ENTRY * 32),
+                ('unknown2', ctypes.c_uint32 * 189)]
+
+class NV_DETAILED_POWER_STATUS(NvVersioned):
+    class NV_DETAILED_POWER_STATUS_ENTRY(ctypes.Structure):
+        _fields_ = [('_powerAvg', ctypes.c_int32),
+                    ('_powerMin', ctypes.c_int32),
+                    ('_powerMax', ctypes.c_int32),
+                    ('_current', ctypes.c_int32),
+                    ('_voltage', ctypes.c_int32),
+                    ('_energy1', ctypes.c_int32),
+                    ('_energy2', ctypes.c_int32),
+                    ('unknown', ctypes.c_uint8 * 16)]
+        @property
+        def power(self):
+            return self._powerAvg / 1000.0
+        @property
+        def current(self):
+            return self._current / 1000.0
+        @property
+        def voltage(self):
+            return self._voltage / 1000000.0
+
+    _nv_version_ = 1
+    # check: version == 0x1059C
+    _fields_ = [('version', ctypes.c_uint32),
+                ('selector', ctypes.c_uint32),
+                ('unknown1', ctypes.c_uint32 * 5),
+                ('entries', NV_DETAILED_POWER_STATUS_ENTRY * 32)]
+
 class Method:
     def __init__(self, offset, restype, *argtypes):
         self.proto = ctypes.CFUNCTYPE(restype, *argtypes, use_errno=True, use_last_error=True)
@@ -267,6 +360,8 @@ class NvAPI:
     NvAPI_GPU_ClientPowerPoliciesGetStatus = NvMethod(0x70916171, 'NvAPI_GPU_ClientPowerPoliciesGetStatus', NvPhysicalGpu, ctypes.POINTER(NV_GPU_POWER_STATUS))
     NvAPI_GPU_ClientPowerPoliciesSetStatus = NvMethod(0xAD95F5ED, 'NvAPI_GPU_ClientPowerPoliciesSetStatus', NvPhysicalGpu, ctypes.POINTER(NV_GPU_POWER_STATUS))
     NvAPI_GPU_ClientPowerTopologyGetStatus = NvMethod(0xEDCF624E, 'NvAPI_GPU_ClientPowerTopologyGetStatus', NvPhysicalGpu, ctypes.POINTER(NV_GPU_TOPOLOGY_STATUS))
+    NvAPI_GPU_GetDetailedPowerTopology = NvMethod(0xC12EB19E, 'NvAPI_GPU_GetDetailedPowerTopology', NvPhysicalGpu, ctypes.POINTER(NV_DETAILED_POWER_TOPOLOGY))
+    NvAPI_GPU_GetDetailedPowerInfo = NvMethod(0xF40238EF, 'NvAPI_GPU_GetDetailedPowerInfo', NvPhysicalGpu, ctypes.POINTER(NV_DETAILED_POWER_STATUS))
 
     def __init__(self):
         self.NvAPI_Initialize()
@@ -352,4 +447,15 @@ class NvAPI:
     def get_topology_status(self, dev: NvPhysicalGpu) -> NV_GPU_TOPOLOGY_STATUS:
         value = NV_GPU_TOPOLOGY_STATUS()
         self.NvAPI_GPU_ClientPowerTopologyGetStatus(dev, ctypes.pointer(value))
+        return value
+
+    def get_detailed_power_topology(self, dev: NvPhysicalGpu) -> NV_DETAILED_POWER_TOPOLOGY:
+        value = NV_DETAILED_POWER_TOPOLOGY()
+        self.NvAPI_GPU_GetDetailedPowerTopology(dev, ctypes.pointer(value))
+        return value
+
+    def get_detailed_power_status(self, dev: NvPhysicalGpu, topology: NV_DETAILED_POWER_TOPOLOGY) -> NV_DETAILED_POWER_STATUS:
+        value = NV_DETAILED_POWER_STATUS()
+        value.selector = topology.selector
+        self.NvAPI_GPU_GetDetailedPowerInfo(dev, ctypes.pointer(value))
         return value

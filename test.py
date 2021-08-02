@@ -29,8 +29,11 @@ def main():
 
         print(f'power limit: {gpu.power_limit}%')
         print(f'current power: {gpu.power}%')
-
         #gpu.set_power_limit(80)
+
+        for rail, powers in gpu.get_rail_powers().items():
+            for power in powers:
+                print(f'{rail}: P={power.power:.2f}W I={power.current:.2f}A U={power.voltage:.2f}V')
         
         cuda_dev += 1
 

@@ -1,3 +1,4 @@
+import collections
 import ctypes
 import typing
 
@@ -24,6 +25,11 @@ class ClockDelta(typing.NamedTuple):
     processor: Delta
     video: Delta
 
+class PowerDetails(typing.NamedTuple):
+    power: float
+    current: float
+    voltage: float
+
 domains = {NVAPI_GPU_PUBLIC_CLOCK_GRAPHICS: 'core', NVAPI_GPU_PUBLIC_CLOCK_MEMORY: 'memory',
            NVAPI_GPU_PUBLIC_CLOCK_PROCESSOR: 'processor', NVAPI_GPU_PUBLIC_CLOCK_VIDEO: 'video'}
 
@@ -34,6 +40,7 @@ class Gpu:
         self.api = api
         self.__name = None
         self.__sensor_hint = None
+        self.__power_topo = None
 
     def _get_temp(self, *indices):
         try:
@@ -169,3 +176,15 @@ class Gpu:
             if entry.domain == 0: # GPU consumption
                 return entry.power
         return None
+
+    def get_rail_powers(self) -> typing.Dict[str, typing.List[PowerDetails]]:
+        '''Reads power/current/voltage usings of different rails in the GPU.'''
+        if self.__power_topo is None:
+            self.__power_topo = self.api.get_detailed_power_topology(self.handle)
+        raw = self.api.get_detailed_power_status(self.handle, self.__power_topo)
+        result = collections.defaultdict(list)
+        for topo, status in zip(self.__power_topo.entries, raw.entries):
+            if topo.type == 0:
+                continue
+            result[topo.rail].append(PowerDetails(power=status.power, current=status.current, voltage=status.voltage))
+        return result
