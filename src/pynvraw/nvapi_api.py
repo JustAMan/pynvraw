@@ -347,7 +347,7 @@ class NvAPI:
     NvAPI_GPU_GetBusId = NvMethod(0x1BE0B8E5, 'NvAPI_GPU_GetBusId', NvPhysicalGpu, ctypes.POINTER(ctypes.c_uint32))
     NvAPI_GPU_GetBusSlotId = NvMethod(0x2A0A350F, 'NvAPI_GPU_GetBusSlotId', NvPhysicalGpu, ctypes.POINTER(ctypes.c_uint32))
     NvAPI_GPU_GetThermalSettings = NvMethod(0xE3640A56, 'NvAPI_GPU_GetThermalSettings', NvPhysicalGpu, ctypes.c_uint32, ctypes.POINTER(NV_GPU_THERMAL_SETTINGS))
-    NvAPI_GPU_GetAllTempsEx = NvMethod(0x65FE3AAD, 'NvAPI_GPU_GetAllTempsEx', NvPhysicalGpu, ctypes.POINTER(NV_GPU_THERMAL_EX))
+    NvAPI_GPU_QueryThermalSensors  = NvMethod(0x65FE3AAD, 'NvAPI_GPU_QueryThermalSensors ', NvPhysicalGpu, ctypes.POINTER(NV_GPU_THERMAL_EX))
     NvAPI_GPU_GetFullName = NvMethod(0xCEEE8E9F, 'NvAPI_GPU_GetFullName', NvPhysicalGpu, ctypes.POINTER(NvAPI_ShortString))
     NvAPI_GPU_SetCoolerLevels = NvMethod(0x891FA0AE, 'NvAPI_GPU_SetCoolerLevels', NvPhysicalGpu, ctypes.c_int32, ctypes.POINTER(NvCoolerLevels))
     NvAPI_GPU_GetCoolerSettings = NvMethod(0xDA141340, 'NvAPI_GPU_GetCoolerSettings', NvPhysicalGpu, ctypes.c_int32, ctypes.POINTER(NV_GPU_COOLER_SETTINGS))
@@ -391,14 +391,14 @@ class NvAPI:
                 return gpu
         raise ValueError(f'Cannot find a GPU with bus={busId} and slot={slotId}')    
 
-    def get_temps_ex(self, dev: NvPhysicalGpu, sensor_hint=None) -> typing.Tuple[int, typing.Tuple[float]]:
+    def read_thermal_sensors(self, dev: NvPhysicalGpu, sensor_hint=None) -> typing.Tuple[int, typing.Tuple[float]]:
         exc = None
         counts = [sensor_hint] if sensor_hint is not None else range(32, 1, -1)
         for count in counts:
             thermal = NV_GPU_THERMAL_EX()
             thermal.mask = (1 << count) - 1
             try:
-                self.NvAPI_GPU_GetAllTempsEx(dev, ctypes.pointer(thermal))
+                self.NvAPI_GPU_QueryThermalSensors (dev, ctypes.pointer(thermal))
             except NvError as ex:
                 exc = ex
                 continue

@@ -44,7 +44,7 @@ class Gpu:
 
     def _get_temp(self, *indices):
         try:
-            self.__sensor_hint, sensors = self.api.get_temps_ex(self.handle, self.__sensor_hint)
+            self.__sensor_hint, sensors = self.api.read_thermal_sensors(self.handle, self.__sensor_hint)
         except NvError as ex:
             if ex.status == 'NVAPI_NOT_SUPPORTED':
                 return None
