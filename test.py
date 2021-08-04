@@ -23,13 +23,26 @@ def main():
 
         pinfo = api.get_power_info(gpu.handle)
         print(f'power info: valid={pinfo.valid} count={pinfo.count}')
-        for idx in range(pinfo.count):
-            entry = pinfo.entries[idx]
+        for entry in pinfo.entries[:pinfo.count]:
             print(f'\tpstate={entry.pstate}, min={entry.min_power/1000}%, def={entry.def_power/1000}%, max={entry.max_power/1000}%')
+        pstates = api.get_pstates(gpu.handle)
+        print(f'\t{pstates.ov.numVoltages=}')
+        for pstate in pstates.pstates[:pstates.numPstates]:
+            print(f'\tstate={pstate.pstateId} edit={pstate.bIsEditable}')
+            for bv in pstate.baseVoltages[:pstates.numBaseVoltages]:
+                print(f'\t\tdomain={bv.domainId} edit={bv.bIsEditable} U={bv.volt_uV/1000000.:.4f}V (Umin={bv.voltDelta_uV.valueMin/1000000.:.4f}V | Ucur={bv.voltDelta_uV.value/1000000.:.4f}V | Umax={bv.voltDelta_uV.valueMax/1000000.:.4f}V')
+        for ov in pstates.ov.voltages[:pstates.ov.numVoltages]:
+            print(f'\tdomain={ov.domain} edit={ov.bIsEditable} U={ov.volt_uV/1000000.:.4f}V (Umin={ov.voltDelta_uV.valueMin/1000000.:.4f}V | Ucur={ov.voltDelta_uV.value/1000000.:.4f}V | Umax={ov.voltDelta_uV.valueMax/1000000.:.4f}V')
 
         print(f'power limit: {gpu.power_limit}%')
         print(f'current power: {gpu.power}%')
         #gpu.set_power_limit(80)
+
+        powerInfo = api.get_power_monitor_info(gpu.handle)
+        #print(powerInfo)
+        powerStatus = api.get_power_monitor_status(gpu.handle, powerInfo)
+        print(powerStatus)
+
 
         for rail, powers in gpu.get_rail_powers().items():
             for power in powers:

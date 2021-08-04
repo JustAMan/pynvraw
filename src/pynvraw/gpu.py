@@ -40,7 +40,7 @@ class Gpu:
         self.api = api
         self.__name = None
         self.__sensor_hint = None
-        self.__power_topo = None
+        self.__power_info = None
 
     def _get_temp(self, *indices):
         try:
@@ -179,12 +179,12 @@ class Gpu:
 
     def get_rail_powers(self) -> typing.Dict[str, typing.List[PowerDetails]]:
         '''Reads power/current/voltage usings of different rails in the GPU.'''
-        if self.__power_topo is None:
-            self.__power_topo = self.api.get_detailed_power_topology(self.handle)
-        raw = self.api.get_detailed_power_status(self.handle, self.__power_topo)
+        if self.__power_info is None:
+            self.__power_info = self.api.get_power_monitor_info(self.handle)
+        raw = self.api.get_power_monitor_status(self.handle, self.__power_info)
         result = collections.defaultdict(list)
-        for topo, status in zip(self.__power_topo.entries, raw.entries):
-            if topo.type == 0:
+        for channel, status in zip(self.__power_info.channels, raw.entries):
+            if channel.type == 'DEFAULT':
                 continue
-            result[topo.rail].append(PowerDetails(power=status.power, current=status.current, voltage=status.voltage))
+            result[channel.rail].append(PowerDetails(power=status.power, current=status.current, voltage=status.voltage))
         return result
