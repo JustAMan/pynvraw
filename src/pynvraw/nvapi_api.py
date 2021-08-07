@@ -57,7 +57,7 @@ class StrMixin:
                 result.append(f'\t{k}={v[0]}')
                 result.extend(f'\t{e}' for e in v[1:])
             else:
-                result.append(f'\t{k}={v}')
+                result.append(f'\t{k}={v!s}')
         return '\n'.join(result)
     def __repr__(self):
         return self.__str__()
@@ -202,6 +202,35 @@ class NV_GPU_FAN_COOLERS_STATUS(NvVersioned):
                 ('count', ctypes.c_uint32),
                 ('reserved', ctypes.c_uint32 * 8),
                 ('_entries', NV_GPU_FAN_COOLERS_STATUS_ENTRY * 32)]
+    @property
+    def entries(self):
+        return self._entries[:self.count]
+
+class FAN_COOLER_CONTROL_MODE(enum.IntEnum):
+    AUTO = 0
+    MANUAL = 1
+
+class NV_GPU_FAN_COOLERS_CONTROL(NvVersioned):
+    class NV_GPU_FAN_COOLERS_CONTROL_ENTRY(StrStructure):
+        _pack_ = 8
+        _fields_ = [('coolerId', ctypes.c_uint32),
+                    ('level', ctypes.c_uint32),
+                    ('_mode', ctypes.c_uint32),
+                    ('reserved', ctypes.c_uint32 * 8)]
+        @property
+        def mode(self):
+            return FAN_COOLER_CONTROL_MODE(self._mode)
+        @mode.setter
+        def mode(self, value):
+            self._mode = int(value)
+
+    _nv_version_ = 1
+    _pack_ = 8
+    _fields_ = [('version', ctypes.c_uint32),
+                ('unknown', ctypes.c_uint32),
+                ('count', ctypes.c_uint32),
+                ('reserved', ctypes.c_uint32 * 8),
+                ('_entries', NV_GPU_FAN_COOLERS_CONTROL_ENTRY * 32)]
     @property
     def entries(self):
         return self._entries[:self.count]
@@ -596,6 +625,8 @@ class NvAPI:
 
     NvAPI_GPU_ClientFanCoolersGetInfo = NvMethod(0xFB85B01E, 'NvAPI_GPU_ClientFanCoolersGetInfo', NvPhysicalGpu, ctypes.POINTER(NV_GPU_FAN_COOLERS_INFO))
     NvAPI_GPU_ClientFanCoolersGetStatus = NvMethod(0x35AED5E8, 'NvAPI_GPU_ClientFanCoolersGetStatus', NvPhysicalGpu, ctypes.POINTER(NV_GPU_FAN_COOLERS_STATUS))
+    NvAPI_GPU_ClientFanCoolersGetControl = NvMethod(0x814B209F, 'NvAPI_GPU_ClientFanCoolersGetControl', NvPhysicalGpu, ctypes.POINTER(NV_GPU_FAN_COOLERS_CONTROL))
+    NvAPI_GPU_ClientFanCoolersSetControl = NvMethod(0xA58971A5, 'NvAPI_GPU_ClientFanCoolersSetControl', NvPhysicalGpu, ctypes.POINTER(NV_GPU_FAN_COOLERS_CONTROL))
 
     def __init__(self):
         self.NvAPI_Initialize()
@@ -720,3 +751,15 @@ class NvAPI:
         value = NV_GPU_FAN_COOLERS_STATUS()
         self.NvAPI_GPU_ClientFanCoolersGetStatus(dev, ctypes.pointer(value))
         return value
+
+    def get_coolers_control(self, dev: NvPhysicalGpu) -> NV_GPU_FAN_COOLERS_CONTROL:
+        if self.__version < 0x9C40:
+            raise ValueError('This feature requires new drivers')
+        value = NV_GPU_FAN_COOLERS_CONTROL()
+        self.NvAPI_GPU_ClientFanCoolersGetControl(dev, ctypes.pointer(value))
+        return value
+
+    def set_coolers_control(self, dev: NvPhysicalGpu, control: NV_GPU_FAN_COOLERS_CONTROL):
+        if self.__version < 0x9C40:
+            raise ValueError('This feature requires new drivers')
+        self.NvAPI_GPU_ClientFanCoolersSetControl(dev, ctypes.pointer(control))

@@ -22,6 +22,7 @@ def main():
         else:
             print(v2)
             print(api.get_coolers_status(gpu.handle))
+            print(api.get_coolers_control(gpu.handle))
 
         for kind in 'base boost current'.split():
             print(f'clocks for {kind}: {gpu.get_freqs(kind)}')
