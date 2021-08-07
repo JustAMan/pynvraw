@@ -24,6 +24,9 @@ def main():
             print(api.get_coolers_status(gpu.handle))
             print(api.get_coolers_control(gpu.handle))
 
+        #if '3090' in gpu.name:
+        #    gpu.fan = 85
+
         for kind in 'base boost current'.split():
             print(f'clocks for {kind}: {gpu.get_freqs(kind)}')
         try:

@@ -5,7 +5,7 @@ import typing
 from .nvapi_api import NvAPI, NvPhysicalGpu, NV_GPU_THERMAL_SETTINGS, NVAPI_THERMAL_TARGET_ALL, NVAPI_THERMAL_TARGET_GPU, \
         NvAPI_ShortString, NV_GPU_CLOCK_FREQUENCIES_CURRENT_FREQ, NV_GPU_CLOCK_FREQUENCIES_BASE_CLOCK, NV_GPU_CLOCK_FREQUENCIES_BOOST_CLOCK, \
         NVAPI_GPU_PUBLIC_CLOCK_GRAPHICS, NVAPI_GPU_PUBLIC_CLOCK_MEMORY, NVAPI_GPU_PUBLIC_CLOCK_PROCESSOR, NVAPI_GPU_PUBLIC_CLOCK_VIDEO, \
-        NV_GPU_POWER_STATUS
+        NV_GPU_POWER_STATUS, FAN_COOLER_CONTROL_MODE
 from .status import NvError
 
 class Delta(typing.NamedTuple):
@@ -41,6 +41,7 @@ class Gpu:
         self.__name = None
         self.__sensor_hint = None
         self.__power_info = None
+        self.__cooler_type = None
 
     def _get_temp(self, *indices):
         try:
@@ -76,22 +77,64 @@ class Gpu:
             self.__name = name.value.decode('utf8')
         return self.__name
 
-    @property
-    def fan(self) -> int:
-        '''Reads cooler duty cycle in % (if multiple coolers present reports lowest duty).'''
+    def __read_gtx_coolers(self):
         try:
             settings = self.api.get_cooler_settings(self.handle)
         except NvError as ex:
             if ex.status == 'NVAPI_NOT_SUPPORTED':
                 return None
             raise
-        levels = [cooler.current_level for cooler in settings.coolers[:settings.count]]
-        return min(levels)
+        return tuple(cooler.current_level for cooler in settings.coolers[:settings.count])
+
+    def __write_gtx_coolers(self, levels):
+        assert len(levels) == 1
+        value = min(max(levels[0], 0), 100)
+        self.api.set_cooler_duty(self.handle, 0, value)
+
+    def __read_rtx_coolers(self):
+        try:
+            control = self.api.get_coolers_control(self.handle)
+        except NvError as ex:
+            if ex.status == 'NVAPI_NOT_SUPPORTED':
+                return None
+            raise
+        return tuple(cooler.level for cooler in control.entries)
+
+    def __write_rtx_coolers(self, levels):
+        control = self.api.get_coolers_control(self.handle)
+        assert len(levels) <= control.count
+        for fan, level in zip(control._entries, levels):
+            fan.mode = FAN_COOLER_CONTROL_MODE.MANUAL
+            fan.level = min(max(level, 0), 100)
+        self.api.set_coolers_control(self.handle, control)
+
+    def __get_cooler_interface(self):
+        if self.__cooler_type is None:
+            gtx = self.__read_gtx_coolers()
+            if gtx:
+                assert len(gtx) == 1
+                self.__cooler_type = (self.__read_gtx_coolers, self.__write_gtx_coolers, len(gtx))
+            else:
+                rtx = self.__read_rtx_coolers()
+                if rtx:
+                    self.__cooler_type = (self.__read_rtx_coolers, self.__write_rtx_coolers, len(rtx))
+                else:
+                    self.__cooler_type = (lambda: (), lambda levels: None, 0)
+        return self.__cooler_type
+
+    @property
+    def fan(self) -> typing.Tuple[int]:
+        '''Reads coolers' duty cycles in %. Returns None if unavailable.'''
+        reader, _, _ = self.__get_cooler_interface()
+        return reader()
 
     @fan.setter
-    def fan(self, value):
-        '''Set _all_ coolers duty cycles (in %).'''
-        self.api.set_cooler_duty(self.handle, 0, value)
+    def fan(self, value: typing.Union[typing.Tuple[int], int]):
+        '''Set coolers duty cycles (in %). If one int specified, sets all coolers to that duty.'''
+        _, writer, count = self.__get_cooler_interface()
+        if not isinstance(value, (tuple, list)):
+            value = [value] * count
+        return writer(value)
 
     @staticmethod
     def __cast_domain_freq(freqs, clock_id):
