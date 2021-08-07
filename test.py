@@ -29,11 +29,11 @@ def main():
 
         for kind in 'base boost current'.split():
             print(f'clocks for {kind}: {gpu.get_freqs(kind)}')
-        try:
-            api.restore_coolers(gpu.handle)
-        except NvError as err:
-            if err.status != 'NVAPI_NOT_SUPPORTED':
-                raise
+        #try:
+        #    api.restore_coolers(gpu.handle)
+        #except NvError as err:
+        #    if err.status != 'NVAPI_NOT_SUPPORTED':
+        #        raise
 
         print(gpu.get_overclock())
         #gpu.set_overclock(nvapi.Clocks(core=-150, memory=200, processor=None, video=None))
@@ -43,8 +43,13 @@ def main():
         print(f'power info: valid={pinfo.valid} count={pinfo.count}')
         for entry in pinfo.entries[:pinfo.count]:
             print(f'\tpstate={entry.pstate}, min={entry.min_power/1000}%, def={entry.def_power/1000}%, max={entry.max_power/1000}%')
-        #pstates = api.get_pstates(gpu.handle)
+        pstates = api.get_pstates(gpu.handle)
         #print(pstates)
+        print(f'Voltage: {api.get_core_voltage(gpu.handle)}V')
+        #bmask = api.get_boost_mask(gpu.handle)
+        #print(f'Boost mask:\n{bmask}')
+        #print(f'Boost table:\n{api.get_boost_table(gpu.handle, bmask)}')
+
         #print(f'\t{pstates.ov.numVoltages=}')
         #for pstate in pstates.pstates[:pstates.numPstates]:
         #    print(f'\tstate={pstate.pstateId} edit={pstate.bIsEditable}')

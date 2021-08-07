@@ -77,7 +77,7 @@ class StrMixin:
             value = getattr(self, name)
             if value is None:
                 continue
-            if isinstance(value, ctypes.Array):
+            if isinstance(value, (list, tuple, ctypes.Array)):
                 if len(value) == 0:
                     value = '[]'
                 elif isinstance(value[0], (int, float, str, ctypes._SimpleCData)):
@@ -258,25 +258,6 @@ class NV_GPU_PERF_PSTATES20_PARAM_DELTA(StrStructure):
                 ('valueMin', ctypes.c_int32),
                 ('valueMax', ctypes.c_int32)]
 
-class _NV_GPU_PSTATE_DATA_RANGE(StrStructure):
-    _fields_ = [('minFreq_kHz', ctypes.c_uint32),
-                ('maxFreq_kHz', ctypes.c_uint32),
-                ('domainId', ctypes.c_int),
-                ('minVoltage_uV', ctypes.c_uint32),
-                ('maxVoltage_uV', ctypes.c_uint32)]
-
-class _NV_GPU_PSTATE_DATA_U(StrUnion):
-    _fields_ = [('single_freq_kHz', ctypes.c_uint32),
-                ('range', _NV_GPU_PSTATE_DATA_RANGE)]
-
-class NV_GPU_PSTATE20_CLOCK_ENTRY_V1(StrStructure):
-    _fields_ = [('domainId', ctypes.c_int),
-                ('typeId', ctypes.c_int),
-                ('bIsEditable', ctypes.c_uint32, 1),
-                ('reserved', ctypes.c_uint32, 31),
-                ('freqDelta_kHz', NV_GPU_PERF_PSTATES20_PARAM_DELTA),
-                ('data', _NV_GPU_PSTATE_DATA_U)]
-
 class NV_GPU_PSTATE20_BASE_VOLTAGE_ENTRY_V1(StrStructure):
     _fields_ = [('domainId', ctypes.c_int),
                 ('bIsEditable', ctypes.c_uint32, 1),
@@ -284,18 +265,92 @@ class NV_GPU_PSTATE20_BASE_VOLTAGE_ENTRY_V1(StrStructure):
                 ('volt_uV', ctypes.c_uint32),
                 ('voltDelta_uV', NV_GPU_PERF_PSTATES20_PARAM_DELTA)]
 
-class _NV_GPU_PSTATE(StrStructure):
-    _fields_ = [('pstateId', ctypes.c_int),
-                ('bIsEditable', ctypes.c_uint32, 1),
-                ('reserved', ctypes.c_uint32, 31),
-                ('clocks', NV_GPU_PSTATE20_CLOCK_ENTRY_V1 * NVAPI_MAX_GPU_PSTATE20_CLOCKS),
-                ('baseVoltages', NV_GPU_PSTATE20_BASE_VOLTAGE_ENTRY_V1 * NVAPI_MAX_GPU_PSTATE20_BASE_VOLTAGES)]
+class ClockType(enum.IntEnum):
+    SINGLE = 0
+    RANGE = 1
 
-class _NV_GPU_OVERVOLT(StrStructure):
-    _fields_ = [('numVoltages', ctypes.c_uint32),
-                ('voltages', NV_GPU_PSTATE20_BASE_VOLTAGE_ENTRY_V1 * NVAPI_MAX_GPU_PSTATE20_BASE_VOLTAGES)]
+class NV_GPU_PUBLIC_CLOCK_ID(enum.IntEnum):
+    GRAPHICS = 0
+    MEMORY1 = 1
+    PROCESSOR = 2
+    VIDEO = 3
+    MEMORY2 = 4
+    UNDEFINED = 5
 
 class NV_GPU_PERF_PSTATES20_INFO(NvVersioned):
+    class _NV_GPU_PSTATE(StrStructure):
+        def __init__(self):
+            super().__init__()
+            self.__numClocks = NVAPI_MAX_GPU_PSTATE20_CLOCKS
+            self.__numVoltages = NVAPI_MAX_GPU_PSTATE20_BASE_VOLTAGES
+        def _setNums(self, numClocks, numVoltages):
+            self.__numClocks = numClocks
+            self.__numVoltages = numVoltages
+
+        class NV_GPU_PSTATE20_CLOCK_ENTRY_V1(StrStructure):
+            class _NV_GPU_PSTATE_DATA_U(StrUnion):
+                class _NV_GPU_PSTATE_DATA_RANGE(StrStructure):
+                    _fields_ = [('_minFreq', ctypes.c_uint32),
+                                ('_maxFreq', ctypes.c_uint32),
+                                ('domainId', ctypes.c_int),
+                                ('_minVoltage', ctypes.c_uint32),
+                                ('_maxVoltage', ctypes.c_uint32)]
+                    @property
+                    def minFreq(self):
+                        return self._minFreq / 1000.0
+                    @property
+                    def maxFreq(self):
+                        return self._maxFreq / 1000.0
+                    @property
+                    def minVoltage(self):
+                        return self._minVoltage / 1000000.0
+                    @property
+                    def maxVoltage(self):
+                        return self._maxVoltage / 1000000.0
+
+                _fields_ = [('_singleFreq', ctypes.c_uint32),
+                            ('range', _NV_GPU_PSTATE_DATA_RANGE)]
+                @property
+                def singleFreq(self):
+                    return self._singleFreq / 1000.0
+
+            _fields_ = [('_domainId', ctypes.c_int),
+                        ('_typeId', ctypes.c_int),
+                        ('bIsEditable', ctypes.c_uint32, 1),
+                        ('reserved', ctypes.c_uint32, 31),
+                        ('freqDelta_kHz', NV_GPU_PERF_PSTATES20_PARAM_DELTA),
+                        ('_data', _NV_GPU_PSTATE_DATA_U)]
+            @property
+            def domainId(self):
+                return NV_GPU_PUBLIC_CLOCK_ID(self._domainId)
+            @property
+            def typeId(self):
+                return ClockType(self._typeId)
+            @property
+            def data(self):
+                attr = {ClockType.SINGLE: 'singleFreq',
+                        ClockType.RANGE: 'range'}[self.typeId]
+                return getattr(self._data, attr)
+
+        _fields_ = [('pstateId', ctypes.c_int),
+                    ('bIsEditable', ctypes.c_uint32, 1),
+                    ('reserved', ctypes.c_uint32, 31),
+                    ('_clocks', NV_GPU_PSTATE20_CLOCK_ENTRY_V1 * NVAPI_MAX_GPU_PSTATE20_CLOCKS),
+                    ('_baseVoltages', NV_GPU_PSTATE20_BASE_VOLTAGE_ENTRY_V1 * NVAPI_MAX_GPU_PSTATE20_BASE_VOLTAGES)]
+        @property
+        def clocks(self):
+            return self._clocks[:self.__numClocks]
+        @property
+        def baseVoltages(self):
+            return self._baseVoltages[:self.__numVoltages]
+
+    class _NV_GPU_OVERVOLT(StrStructure):
+        _fields_ = [('numVoltages', ctypes.c_uint32),
+                    ('_voltages', NV_GPU_PSTATE20_BASE_VOLTAGE_ENTRY_V1 * NVAPI_MAX_GPU_PSTATE20_BASE_VOLTAGES)]
+        @property
+        def voltages(self):
+            return self._voltages[:self.numVoltages]
+
     _nv_version_ = 2
     _fields_ = [('version', ctypes.c_uint32),
                 ('bIsEditable', ctypes.c_uint32, 1),
@@ -303,8 +358,14 @@ class NV_GPU_PERF_PSTATES20_INFO(NvVersioned):
                 ('numPstates', ctypes.c_uint32),
                 ('numClocks', ctypes.c_uint32),
                 ('numBaseVoltages', ctypes.c_uint32),
-                ('pstates', _NV_GPU_PSTATE * NVAPI_MAX_GPU_PSTATE20_PSTATES),
+                ('_pstates', _NV_GPU_PSTATE * NVAPI_MAX_GPU_PSTATE20_PSTATES),
                 ('ov', _NV_GPU_OVERVOLT)]
+    @property
+    def pstates(self):
+        result = list(self._pstates[:self.numPstates])
+        for p in result:
+            p._setNums(self.numClocks, self.numBaseVoltages)
+        return result
 
 class _NV_GPU_POWER_INFO_ENTRY(StrStructure):
     _fields_ = [('pstate', ctypes.c_uint32),
@@ -571,6 +632,49 @@ class NV_POWER_MONITOR_STATUS(NvVersioned):
     def totalPower(self) -> float:
         return self._totalPower / 1000.0
 
+class NV_GPU_VOLTAGE_STATUS(NvVersioned):
+    _nv_version_ = 1
+    _fields_ = [('version', ctypes.c_uint32),
+                ('reserved1', ctypes.c_uint32),
+                ('reserved2', ctypes.c_uint32 * 8),
+                ('_voltage', ctypes.c_uint32),
+                ('reserved3', ctypes.c_uint32 * 8)]
+    @property
+    def voltage(self):
+        return self._voltage / 1000000.0
+
+class NV_GPU_BOOST_MASK(NvVersioned):
+    class CLOCK_BOOST_MASK(StrStructure):
+        _pack_ = 8
+        _fields_ = [('memoryDelta', ctypes.c_int32),
+                    ('gpuDelta', ctypes.c_int32),
+                    ('unknown', ctypes.c_uint32 * 4)]
+
+    _nv_version_ = 1
+    _pack_ = 8
+    _fields_ = [('version', ctypes.c_uint32),
+                ('masks', ctypes.c_uint32 * 16),
+                ('boostMasks', CLOCK_BOOST_MASK * 103),
+                ('unknown2', ctypes.c_uint32 * 912)]
+
+class NV_GPU_BOOST_TABLE(NvVersioned):
+    class NV_GPU_BOOST_TABLE_GPU_DELTA(StrStructure):
+        _fields_ = [('unknown1', ctypes.c_uint32 * 5),
+                    ('_freqDelta', ctypes.c_int32),
+                    ('unknown2', ctypes.c_uint32 * 3)]
+        @property
+        def freqDelta(self):
+            return self._freqDelta / 1000.0
+
+    _nv_version_ = 1
+    _pack_ = 8
+    _fields_ = [('version', ctypes.c_uint32),
+                ('masks', ctypes.c_uint32 * 16),
+                ('gpuDelta', NV_GPU_BOOST_TABLE_GPU_DELTA * 80),
+                ('memoryFilled', ctypes.c_uint32 * 23),
+                ('memoryDeltas', ctypes.c_uint32 * 23),
+                ('reserved2', ctypes.c_uint32 * 1529)]
+
 class Method:
     def __init__(self, offset, restype, *argtypes):
         self.proto = ctypes.CFUNCTYPE(restype, *argtypes, use_errno=True, use_last_error=True)
@@ -627,6 +731,10 @@ class NvAPI:
     NvAPI_GPU_ClientFanCoolersGetStatus = NvMethod(0x35AED5E8, 'NvAPI_GPU_ClientFanCoolersGetStatus', NvPhysicalGpu, ctypes.POINTER(NV_GPU_FAN_COOLERS_STATUS))
     NvAPI_GPU_ClientFanCoolersGetControl = NvMethod(0x814B209F, 'NvAPI_GPU_ClientFanCoolersGetControl', NvPhysicalGpu, ctypes.POINTER(NV_GPU_FAN_COOLERS_CONTROL))
     NvAPI_GPU_ClientFanCoolersSetControl = NvMethod(0xA58971A5, 'NvAPI_GPU_ClientFanCoolersSetControl', NvPhysicalGpu, ctypes.POINTER(NV_GPU_FAN_COOLERS_CONTROL))
+
+    NvAPI_GPU_GetCurrentVoltage = NvMethod(0x465F9BCF, 'NvAPI_GPU_GetCurrentVoltage', NvPhysicalGpu, ctypes.POINTER(NV_GPU_VOLTAGE_STATUS))
+    NvAPI_GPU_GetClockBoostTable = NvMethod(0x23F1B133, 'NvAPI_GPU_GetClockBoostTable', NvPhysicalGpu, ctypes.POINTER(NV_GPU_BOOST_TABLE))
+    NvAPI_GPU_GetClockBoostMask = NvMethod(0x507B4B59, 'NvAPI_GPU_GetClockBoostMask', NvPhysicalGpu, ctypes.POINTER(NV_GPU_BOOST_MASK))
 
     def __init__(self):
         self.NvAPI_Initialize()
@@ -763,3 +871,20 @@ class NvAPI:
         if self.__version < 0x9C40:
             raise ValueError('This feature requires new drivers')
         self.NvAPI_GPU_ClientFanCoolersSetControl(dev, ctypes.pointer(control))
+
+    def get_core_voltage(self, dev: NvPhysicalGpu) -> float:
+        value = NV_GPU_VOLTAGE_STATUS()
+        self.NvAPI_GPU_GetCurrentVoltage(dev, ctypes.pointer(value))
+        return value.voltage
+
+    def get_boost_table(self, dev: NvPhysicalGpu, boost_mask: NV_GPU_BOOST_MASK) -> NV_GPU_BOOST_TABLE:
+        value = NV_GPU_BOOST_TABLE()
+        for i, m in enumerate(boost_mask.masks):
+            value.masks[i] = m
+        self.NvAPI_GPU_GetClockBoostTable(dev, ctypes.pointer(value))
+        return value
+
+    def get_boost_mask(self, dev: NvPhysicalGpu) -> NV_GPU_BOOST_MASK:
+        value = NV_GPU_BOOST_MASK()
+        self.NvAPI_GPU_GetClockBoostMask(dev, ctypes.pointer(value))
+        return value
