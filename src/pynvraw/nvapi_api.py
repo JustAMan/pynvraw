@@ -4,7 +4,7 @@ import ctypes
 import typing
 import sys
 import collections
-import pprint
+import enum
 
 from .status import NvStatus, NvError, NVAPI_OK
 
@@ -42,7 +42,7 @@ NVAPI_MAX_GPU_TOPOLOGY_ENTRIES = 4
 
 NvAPI_ShortString = ctypes.c_char * NVAPI_SHORT_STRING_MAX
 
-class StrStructure(ctypes.Structure):
+class StrMixin:
     def __str__(self):
         dct = self.as_dict()
         result = [dct.pop('__name__') + ':']
@@ -52,7 +52,7 @@ class StrStructure(ctypes.Structure):
                 for e in v:
                     result.extend(f'\t\t{l}' for l in str(e).splitlines())
                 result.append('\t]')
-            elif isinstance(v, (dict, collections.OrderedDict, StrStructure)):
+            elif isinstance(v, (dict, collections.OrderedDict, StrMixin)):
                 v = str(v).splitlines()
                 result.append(f'\t{k}={v[0]}')
                 result.extend(f'\t{e}' for e in v[1:])
@@ -78,9 +78,20 @@ class StrStructure(ctypes.Structure):
             if value is None:
                 continue
             if isinstance(value, ctypes.Array):
-                value = [self._cast(e) for e in value]
+                if len(value) == 0:
+                    value = '[]'
+                elif isinstance(value[0], (int, float, str, ctypes._SimpleCData)):
+                    value = f'[{", ".join(map(str, value))}]'
+                else:
+                    value = [self._cast(e) for e in value]
             result[name] = value
         return result
+
+class StrStructure(StrMixin, ctypes.Structure):
+    pass
+
+class StrUnion(StrMixin, ctypes.Union):
+    pass
 
 class NvPhysicalGpu(ctypes.Structure):
     _pack_ = 8
@@ -116,35 +127,84 @@ class NV_GPU_THERMAL_EX(NvVersioned):
     def sensors(self):
         return tuple(x / 256.0 for x in self._sensors)
 
-class _NvCoolerLevel(StrStructure):
-    _pack_ = 1
-    _fields_ = [('level', ctypes.c_uint32),
-                ('policy', ctypes.c_uint32)]
+class NV_COOLER_TARGET(enum.IntFlag):
+    NONE = 0
+    GPU = 1
+    MEMORY = 2
+    POWER_SUPPLY = 4
+    ALL = 7    
 
 class NvCoolerLevels(NvVersioned):
+    class _NvCoolerLevel(StrStructure):
+        _pack_ = 1
+        _fields_ = [('level', ctypes.c_uint32),
+                    ('policy', ctypes.c_uint32)]
+
     _nv_version_ = 1
     _fields_ = [('version', ctypes.c_uint32),
                 ('levels', _NvCoolerLevel * 20)]
 
-class NV_SINGLE_COOLER(StrStructure):
-    _fields_ = [('type', ctypes.c_int32),
-                ('controller', ctypes.c_int32),
-                ('default_min', ctypes.c_int32),
-                ('default_max', ctypes.c_int32),
-                ('current_min', ctypes.c_int32),
-                ('current_max', ctypes.c_int32),
-                ('current_level', ctypes.c_int32),
-                ('default_policy', ctypes.c_int32),
-                ('current_policy', ctypes.c_int32),
-                ('target', ctypes.c_int32),
-                ('control_type', ctypes.c_int32),
-                ('active', ctypes.c_int32)]
-
 class NV_GPU_COOLER_SETTINGS(NvVersioned):
+    class NV_SINGLE_COOLER(StrStructure):
+        _fields_ = [('type', ctypes.c_int32),
+                    ('controller', ctypes.c_int32),
+                    ('default_min', ctypes.c_int32),
+                    ('default_max', ctypes.c_int32),
+                    ('current_min', ctypes.c_int32),
+                    ('current_max', ctypes.c_int32),
+                    ('current_level', ctypes.c_int32),
+                    ('default_policy', ctypes.c_int32),
+                    ('current_policy', ctypes.c_int32),
+                    ('_target', ctypes.c_int32),
+                    ('control_type', ctypes.c_int32),
+                    ('active', ctypes.c_int32)]
+        @property
+        def target(self):
+            return NV_COOLER_TARGET(self._target)
+
     _nv_version_ = 2
     _fields_ = [('version', ctypes.c_uint32),
                 ('count', ctypes.c_uint32),
                 ('coolers', NV_SINGLE_COOLER * 20)]
+
+class NV_GPU_FAN_COOLERS_INFO(NvVersioned):
+    class NV_GPU_FAN_COOLERS_INFO_ENTRY(StrStructure):
+        _pack_ = 8
+        _fields_ = [('coolerId', ctypes.c_uint32),
+                    ('unknown', ctypes.c_uint32 * 2),
+                    ('maxRpm', ctypes.c_uint32),
+                    ('reserved', ctypes.c_uint32 * 8)]
+    _nv_version_ = 1
+    _pack_ = 8
+    _fields_ = [('version', ctypes.c_uint32),
+                ('supported', ctypes.c_bool),
+                ('count', ctypes.c_uint32),
+                ('reserved', ctypes.c_uint32 * 8),
+                ('_entries', NV_GPU_FAN_COOLERS_INFO_ENTRY * 32)]
+
+    @property
+    def entries(self):
+        return self._entries[:self.count]
+
+class NV_GPU_FAN_COOLERS_STATUS(NvVersioned):
+    class NV_GPU_FAN_COOLERS_STATUS_ENTRY(StrStructure):
+        _pack_ = 8
+        _fields_ = [('coolerId', ctypes.c_uint32),
+                    ('currentRpm', ctypes.c_uint32),
+                    ('minLevel', ctypes.c_uint32),
+                    ('maxLevel', ctypes.c_uint32),
+                    ('level', ctypes.c_uint32),
+                    ('reserved', ctypes.c_uint32 * 8)]
+
+    _nv_version_ = 1
+    _pack_ = 8
+    _fields_ = [('version', ctypes.c_uint32),
+                ('count', ctypes.c_uint32),
+                ('reserved', ctypes.c_uint32 * 8),
+                ('_entries', NV_GPU_FAN_COOLERS_STATUS_ENTRY * 32)]
+    @property
+    def entries(self):
+        return self._entries[:self.count]
 
 class NV_GPU_CLOCK_DOMAIN(StrStructure):
     _fields_ = [('bIsPresent', ctypes.c_uint32, 1),
@@ -176,7 +236,7 @@ class _NV_GPU_PSTATE_DATA_RANGE(StrStructure):
                 ('minVoltage_uV', ctypes.c_uint32),
                 ('maxVoltage_uV', ctypes.c_uint32)]
 
-class _NV_GPU_PSTATE_DATA_U(ctypes.Union):
+class _NV_GPU_PSTATE_DATA_U(StrUnion):
     _fields_ = [('single_freq_kHz', ctypes.c_uint32),
                 ('range', _NV_GPU_PSTATE_DATA_RANGE)]
 
@@ -264,7 +324,7 @@ class NV_GPU_TOPOLOGY_STATUS(NvVersioned):
 
 class NV_POWER_MONITOR_INFO(NvVersioned):
     class NV_POWER_MONITOR_INFO_CHANNEL_INFO(StrStructure):
-        class NV_POWER_MONITOR_INFO_CHANNEL_INFO_DATA(ctypes.Union):
+        class NV_POWER_MONITOR_INFO_CHANNEL_INFO_DATA(StrUnion):
             class NV_GPU_POWER_MONITOR_POWER_CHANNEL_1X_INFO(StrStructure):
                 _fields_ = [('powerDeviceMask', ctypes.c_uint32),
                             ('powerLimit_mW', ctypes.c_uint32)]
@@ -387,7 +447,7 @@ class NV_POWER_MONITOR_INFO(NvVersioned):
             return self._voltFixed / 1000.0
 
     class NV_GPU_POWER_MONITOR_POWER_CHANNEL_RELATIONSHIP_INFO(StrStructure):
-        class NV_GPU_POWER_MONITOR_POWER_CHANNEL_RELATIONSHIP_INFO_DATA(ctypes.Union):
+        class NV_GPU_POWER_MONITOR_POWER_CHANNEL_RELATIONSHIP_INFO_DATA(StrUnion):
             class NV_GPU_POWER_MONITOR_POWER_CHANNEL_RELATIONSHIP_WEIGHT_INFO(StrStructure):
                 _fields_ = [('weight', ctypes.c_int32)]
             class NV_GPU_POWER_MONITOR_POWER_CHANNEL_RELATIONSHIP_BALANCED_PHASE_EST_INFO(StrStructure):
@@ -513,6 +573,8 @@ class NvAPI:
     NvAPI_Initialize = NvMethod(0x0150E828, 'NvAPI_Initialize')
     NvAPI_Unload = NvMethod(0xD22BDD7E, 'NvAPI_Unload')
     NvAPI_EnumPhysicalGPUs = NvMethod(0xE5AC921F, 'NvAPI_EnumPhysicalGPUs', NV_ENUM_GPUS, ctypes.POINTER(ctypes.c_int))
+    NvAPI_SYS_GetDriverAndBranchVersion = NvMethod(0x2926AAAD, 'NvAPI_SYS_GetDriverAndBranchVersion', ctypes.POINTER(ctypes.c_uint32), ctypes.POINTER(NvAPI_ShortString))
+
     NvAPI_GPU_GetBusId = NvMethod(0x1BE0B8E5, 'NvAPI_GPU_GetBusId', NvPhysicalGpu, ctypes.POINTER(ctypes.c_uint32))
     NvAPI_GPU_GetBusSlotId = NvMethod(0x2A0A350F, 'NvAPI_GPU_GetBusSlotId', NvPhysicalGpu, ctypes.POINTER(ctypes.c_uint32))
     NvAPI_GPU_GetThermalSettings = NvMethod(0xE3640A56, 'NvAPI_GPU_GetThermalSettings', NvPhysicalGpu, ctypes.c_uint32, ctypes.POINTER(NV_GPU_THERMAL_SETTINGS))
@@ -532,12 +594,28 @@ class NvAPI:
     NvAPI_GPU_PowerMonitorGetInfo = NvMethod(0xC12EB19E, 'NvAPI_GPU_PowerMonitorGetInfo', NvPhysicalGpu, ctypes.POINTER(NV_POWER_MONITOR_INFO))
     NvAPI_GPU_PowerMonitorGetStatus = NvMethod(0xF40238EF, 'NvAPI_GPU_PowerMonitorGetStatus', NvPhysicalGpu, ctypes.POINTER(NV_POWER_MONITOR_STATUS))
 
+    NvAPI_GPU_ClientFanCoolersGetInfo = NvMethod(0xFB85B01E, 'NvAPI_GPU_ClientFanCoolersGetInfo', NvPhysicalGpu, ctypes.POINTER(NV_GPU_FAN_COOLERS_INFO))
+    NvAPI_GPU_ClientFanCoolersGetStatus = NvMethod(0x35AED5E8, 'NvAPI_GPU_ClientFanCoolersGetStatus', NvPhysicalGpu, ctypes.POINTER(NV_GPU_FAN_COOLERS_STATUS))
+
     def __init__(self):
         self.NvAPI_Initialize()
         self.__gpus = None
 
+        version = ctypes.c_uint32(0)
+        branch = NvAPI_ShortString()
+        self.NvAPI_SYS_GetDriverAndBranchVersion(ctypes.pointer(version), branch)
+
+        self.__version = version.value
+        self.__branch = branch.value.decode('utf8')
+
+        assert self.__version > 0x4650, f'Too old NVidia drivers (version={self.__version}, branch={self.__branch}): unsupported'
+
     def __del__(self):
         self.NvAPI_Unload()
+
+    def get_driver_version(self) -> typing.Tuple[int, str]:
+        '''Returns driver version as int and branch as str.'''
+        return self.__version, self.__branch
 
     @property
     def gpu_handles(self) -> typing.List[NvPhysicalGpu]:
@@ -584,9 +662,9 @@ class NvAPI:
             levels.levels[i].policy = NVAPI_COOLER_POLICY_USER
         self.NvAPI_GPU_SetCoolerLevels(dev, cooler, ctypes.pointer(levels))
 
-    def get_cooler_settings(self, dev: NvPhysicalGpu) -> NV_GPU_COOLER_SETTINGS:
+    def get_cooler_settings(self, dev: NvPhysicalGpu, cooler: NV_COOLER_TARGET=NV_COOLER_TARGET.ALL) -> NV_GPU_COOLER_SETTINGS:
         value = NV_GPU_COOLER_SETTINGS()
-        self.NvAPI_GPU_GetCoolerSettings(dev, 0, ctypes.pointer(value))
+        self.NvAPI_GPU_GetCoolerSettings(dev, int(cooler), ctypes.pointer(value))
         return value
 
     def get_freqs(self, dev: NvPhysicalGpu, type: int) -> NV_GPU_CLOCK_FREQUENCIES:
@@ -627,4 +705,18 @@ class NvAPI:
         value = NV_POWER_MONITOR_STATUS()
         value.channelMask = info.channelMask
         self.NvAPI_GPU_PowerMonitorGetStatus(dev, ctypes.pointer(value))
+        return value
+
+    def get_coolers_info(self, dev: NvPhysicalGpu) -> NV_GPU_FAN_COOLERS_INFO:
+        if self.__version < 0x9C40:
+            raise ValueError('This feature requires new drivers')
+        value = NV_GPU_FAN_COOLERS_INFO()
+        self.NvAPI_GPU_ClientFanCoolersGetInfo(dev, ctypes.pointer(value))
+        return value
+
+    def get_coolers_status(self, dev: NvPhysicalGpu) -> NV_GPU_FAN_COOLERS_STATUS:
+        if self.__version < 0x9C40:
+            raise ValueError('This feature requires new drivers')
+        value = NV_GPU_FAN_COOLERS_STATUS()
+        self.NvAPI_GPU_ClientFanCoolersGetStatus(dev, ctypes.pointer(value))
         return value
