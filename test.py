@@ -61,6 +61,7 @@ def main():
 
         print(f'power limit: {gpu.power_limit}%')
         print(f'current power: {gpu.power}%')
+        print(f'perf limit: {gpu.perf_limit!s}')
         #gpu.set_power_limit(80)
 
         #powerInfo = api.get_power_monitor_info(gpu.handle)

@@ -5,7 +5,7 @@ import typing
 from .nvapi_api import NvAPI, NvPhysicalGpu, NV_GPU_THERMAL_SETTINGS, NVAPI_THERMAL_TARGET_ALL, NVAPI_THERMAL_TARGET_GPU, \
         NvAPI_ShortString, NV_GPU_CLOCK_FREQUENCIES_CURRENT_FREQ, NV_GPU_CLOCK_FREQUENCIES_BASE_CLOCK, NV_GPU_CLOCK_FREQUENCIES_BOOST_CLOCK, \
         NVAPI_GPU_PUBLIC_CLOCK_GRAPHICS, NVAPI_GPU_PUBLIC_CLOCK_MEMORY, NVAPI_GPU_PUBLIC_CLOCK_PROCESSOR, NVAPI_GPU_PUBLIC_CLOCK_VIDEO, \
-        NV_GPU_POWER_STATUS, FAN_COOLER_CONTROL_MODE
+        NV_GPU_POWER_STATUS, FAN_COOLER_CONTROL_MODE, PerfCapReason
 from .status import NvError
 
 class Delta(typing.NamedTuple):
@@ -231,3 +231,8 @@ class Gpu:
                 continue
             result[channel.rail].append(PowerDetails(power=status.power, current=status.current, voltage=status.voltage))
         return result
+
+    @property
+    def perf_limit(self) -> PerfCapReason:
+        '''Reads current performance cap reasons.'''
+        return self.api.get_performance_limit(self.handle)

@@ -675,6 +675,31 @@ class NV_GPU_BOOST_TABLE(NvVersioned):
                 ('memoryDeltas', ctypes.c_uint32 * 23),
                 ('reserved2', ctypes.c_uint32 * 1529)]
 
+class PerfCapReason(enum.IntFlag):
+    NONE = 0
+    POWER = 1
+    TEMPERATURE = 2
+    VOLTAGE = 4
+    UNKNOWN = 8
+    NO_LOAD = 16
+
+class NV_GPU_PERFORMANCE_STATUS(NvVersioned):
+    _nv_version_ = 1
+    _pack_ = 8
+    _fields_ = [('version', ctypes.c_uint32),
+                ('unknown1', ctypes.c_uint32),
+                ('_timer', ctypes.c_ulonglong),
+                ('_limit', ctypes.c_uint32),
+                ('unknown2', ctypes.c_uint32 * 3),
+                ('_timers', ctypes.c_ulonglong * 3),
+                ('unknown3', ctypes.c_uint32 * 326)]
+    @property
+    def timer(self):
+        return self._timer / 1e9
+    @property
+    def limit(self):
+        return PerfCapReason(self._limit)
+
 class Method:
     def __init__(self, offset, restype, *argtypes):
         self.proto = ctypes.CFUNCTYPE(restype, *argtypes, use_errno=True, use_last_error=True)
@@ -735,6 +760,8 @@ class NvAPI:
     NvAPI_GPU_GetCurrentVoltage = NvMethod(0x465F9BCF, 'NvAPI_GPU_GetCurrentVoltage', NvPhysicalGpu, ctypes.POINTER(NV_GPU_VOLTAGE_STATUS))
     NvAPI_GPU_GetClockBoostTable = NvMethod(0x23F1B133, 'NvAPI_GPU_GetClockBoostTable', NvPhysicalGpu, ctypes.POINTER(NV_GPU_BOOST_TABLE))
     NvAPI_GPU_GetClockBoostMask = NvMethod(0x507B4B59, 'NvAPI_GPU_GetClockBoostMask', NvPhysicalGpu, ctypes.POINTER(NV_GPU_BOOST_MASK))
+
+    NvAPI_GPU_PerfPoliciesGetStatus = NvMethod(0x3D358A0C, 'NvAPI_GPU_PerfPoliciesGetStatus', NvPhysicalGpu, ctypes.POINTER(NV_GPU_PERFORMANCE_STATUS))
 
     def __init__(self):
         self.NvAPI_Initialize()
@@ -888,3 +915,8 @@ class NvAPI:
         value = NV_GPU_BOOST_MASK()
         self.NvAPI_GPU_GetClockBoostMask(dev, ctypes.pointer(value))
         return value
+
+    def get_performance_limit(self, dev: NvPhysicalGpu) -> PerfCapReason:
+        value = NV_GPU_PERFORMANCE_STATUS()
+        self.NvAPI_GPU_PerfPoliciesGetStatus(dev, ctypes.pointer(value))
+        return value.limit
