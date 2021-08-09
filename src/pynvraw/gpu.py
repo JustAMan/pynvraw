@@ -5,7 +5,7 @@ import typing
 from .nvapi_api import NvAPI, NvPhysicalGpu, NV_GPU_THERMAL_SETTINGS, NVAPI_THERMAL_TARGET_ALL, NVAPI_THERMAL_TARGET_GPU, \
         NvAPI_ShortString, NV_GPU_CLOCK_FREQUENCIES_CURRENT_FREQ, NV_GPU_CLOCK_FREQUENCIES_BASE_CLOCK, NV_GPU_CLOCK_FREQUENCIES_BOOST_CLOCK, \
         NVAPI_GPU_PUBLIC_CLOCK_GRAPHICS, NVAPI_GPU_PUBLIC_CLOCK_MEMORY, NVAPI_GPU_PUBLIC_CLOCK_PROCESSOR, NVAPI_GPU_PUBLIC_CLOCK_VIDEO, \
-        NV_GPU_POWER_STATUS, FAN_COOLER_CONTROL_MODE, PerfCapReason, RamType
+        NV_GPU_POWER_STATUS, FAN_COOLER_CONTROL_MODE, PerfCapReason, RamType, PowerRailType, PowerChannelType
 from .status import NvError
 
 class Delta(typing.NamedTuple):
@@ -220,14 +220,14 @@ class Gpu:
                 return entry.power
         return None
 
-    def get_rail_powers(self) -> typing.Dict[str, typing.List[PowerDetails]]:
+    def get_rail_powers(self) -> typing.Dict[PowerRailType, typing.List[PowerDetails]]:
         '''Reads power/current/voltage usings of different rails in the GPU.'''
         if self.__power_info is None:
             self.__power_info = self.api.get_power_monitor_info(self.handle)
         raw = self.api.get_power_monitor_status(self.handle, self.__power_info)
         result = collections.defaultdict(list)
         for channel, status in zip(self.__power_info.channels, raw.entries):
-            if channel.type == 'DEFAULT':
+            if channel.type == PowerChannelType.DEFAULT:
                 continue
             result[channel.rail].append(PowerDetails(power=status.power, current=status.current, voltage=status.voltage))
         return result

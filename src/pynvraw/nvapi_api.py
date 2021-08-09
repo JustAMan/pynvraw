@@ -412,6 +412,65 @@ class NV_GPU_TOPOLOGY_STATUS(NvVersioned):
                 ('count', ctypes.c_uint32),
                 ('entries', NV_GPU_TOPOLOGY_ENTRY * NVAPI_MAX_GPU_TOPOLOGY_ENTRIES)]
 
+class PowerChannelType(enum.IntEnum):
+    DEFAULT = 0
+    SUMMATION = 1
+    ESTIMATION = 2
+    SLOW = 3
+    GEMINI_CORRECTION = 4
+    C1X = 5
+    SENSOR = 6
+    PSTATE_ESTIMATION_LUT = 7
+    SENSOR_CLIENT_ALIGNED = 8
+
+class PowerRailType(enum.IntEnum):
+    UNKNOWN = 0
+    OUT_NVVDD = 1
+    OUT_FBVDD = 2
+    OUT_FBVDDQ = 3
+    OUT_FBVDD_Q = 4
+    OUT_PEXVDD = 5
+    OUT_A3V3 = 6
+    OUT_3V3NV = 7
+    OUT_TOTAL_GPU = 8
+    OUT_FBVDDQ_GPU = 9
+    OUT_FBVDDQ_MEM = 10
+    OUT_SRAM = 11
+    IN_PEX12V1 = 222
+    IN_TOTAL_BOARD2 = 223
+    IN_HIGH_VOLT0 = 224
+    IN_HIGH_VOLT1 = 225
+    IN_NVVDD1 = 226
+    IN_NVVDD2 = 227
+    IN_EXT12V_8PIN2 = 228
+    IN_EXT12V_8PIN3 = 229
+    IN_EXT12V_8PIN4 = 230
+    IN_EXT12V_8PIN5 = 231
+    IN_MISC0 = 232
+    IN_MISC1 = 233
+    IN_MISC2 = 234
+    IN_MISC3 = 235
+    IN_USBC0 = 236
+    IN_USBC1 = 237
+    IN_FAN0 = 238
+    IN_FAN1 = 239
+    IN_SRAM = 240
+    IN_PWR_SRC_PP = 241
+    IN_3V3_PP = 242
+    IN_3V3_MAIN = 243
+    IN_3V3_AON = 244
+    IN_TOTAL_BOARD = 245
+    IN_NVVDD = 246
+    IN_FBVDD = 247
+    IN_FBVDDQ = 248
+    IN_FBVDD_Q = 249
+    IN_EXT12V_8PIN0 = 250
+    IN_EXT12V_8PIN1 = 251
+    IN_EXT12V_6PIN0 = 252
+    IN_EXT12V_6PIN1 = 253
+    IN_PEX3V3 = 254
+    IN_PEX12V = 255
+
 class NV_POWER_MONITOR_INFO(NvVersioned):
     class NV_POWER_MONITOR_INFO_CHANNEL_INFO(StrStructure):
         class NV_POWER_MONITOR_INFO_CHANNEL_INFO_DATA(StrUnion):
@@ -453,73 +512,23 @@ class NV_POWER_MONITOR_INFO(NvVersioned):
                     ('reserved', ctypes.c_uint8 * 8),
                     ('_data', NV_POWER_MONITOR_INFO_CHANNEL_INFO_DATA)]
         TYPES = {
-            0: ('DEFAULT', None),
-            1: ('SUMMATION', 'sum'),
-            2: ('ESTIMATION', None),
-            3: ('SLOW', 'slow'),
-            4: ('GEMINI_CORRECTION', 'gemmCorr'),
-            5: ('1X', 'c1x'),
-            6: ('SENSOR', 'sensor'),
-            7: ('PSTATE_ESTIMATION_LUT', 'pstateEstLUT'),
-            8: ('SENSOR_CLIENT_ALIGNED', None)
+            PowerChannelType.SUMMATION: 'sum',
+            PowerChannelType.SLOW: 'slow',
+            PowerChannelType.GEMINI_CORRECTION: 'gemmCorr',
+            PowerChannelType.C1X: 'c1x',
+            PowerChannelType.SENSOR: 'sensor',
+            PowerChannelType.PSTATE_ESTIMATION_LUT: 'pstateEstLUT',
         }
-        RAILS = {
-            0: 'UNKNOWN',
-            1: 'OUT_NVVDD',
-            2: 'OUT_FBVDD',
-            3: 'OUT_FBVDDQ',
-            4: 'OUT_FBVDD_Q',
-            5: 'OUT_PEXVDD',
-            6: 'OUT_A3V3',
-            7: 'OUT_3V3NV',
-            8: 'OUT_TOTAL_GPU',
-            9: 'OUT_FBVDDQ_GPU',
-            10: 'OUT_FBVDDQ_MEM',
-            11: 'OUT_SRAM',
-            222: 'IN_PEX12V1',
-            223: 'IN_TOTAL_BOARD2',
-            224: 'IN_HIGH_VOLT0',
-            225: 'IN_HIGH_VOLT1',
-            226: 'IN_NVVDD1',
-            227: 'IN_NVVDD2',
-            228: 'IN_EXT12V_8PIN2',
-            229: 'IN_EXT12V_8PIN3',
-            230: 'IN_EXT12V_8PIN4',
-            231: 'IN_EXT12V_8PIN5',
-            232: 'IN_MISC0',
-            233: 'IN_MISC1',
-            234: 'IN_MISC2',
-            235: 'IN_MISC3',
-            236: 'IN_USBC0',
-            237: 'IN_USBC1',
-            238: 'IN_FAN0',
-            239: 'IN_FAN1',
-            240: 'IN_SRAM',
-            241: 'IN_PWR_SRC_PP',
-            242: 'IN_3V3_PP',
-            243: 'IN_3V3_MAIN',
-            244: 'IN_3V3_AON',
-            245: 'IN_TOTAL_BOARD',
-            246: 'IN_NVVDD',
-            247: 'IN_FBVDD',
-            248: 'IN_FBVDDQ',
-            249: 'IN_FBVDD_Q',
-            250: 'IN_EXT12V_8PIN0',
-            251: 'IN_EXT12V_8PIN1',
-            252: 'IN_EXT12V_6PIN0',
-            253: 'IN_EXT12V_6PIN1',
-            254: 'IN_PEX3V3',
-            255: 'IN_PEX12V'
-        }
+
         @property
         def rail(self):
-            return self.RAILS.get(self._rail, str(self._rail))
+            return PowerRailType(self._rail)
         @property
         def type(self):
-            return self.TYPES.get(self._type, [str(self._type)])[0]
+            return PowerChannelType(self._type)
         @property
         def data(self):
-            attr = self.TYPES.get(self._type, [None, None])[1]
+            attr = self.TYPES.get(self.type)
             if attr:
                 return getattr(self._data, attr)
             return None

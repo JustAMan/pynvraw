@@ -82,8 +82,12 @@ def main():
 
 
         for rail, powers in gpu.get_rail_powers().items():
-            for power in powers:
-                print(f'{rail}: P={power.power:.2f}W I={power.current:.2f}A U={power.voltage:.2f}V')
+            if len(powers) > 1:
+                print(f'{rail!s}:')
+                for power in powers:
+                    print(f'\tP={power.power:.2f}W I={power.current:.2f}A U={power.voltage:.2f}V')
+            elif powers:
+                print(f'{rail!s}: P={powers[0].power:.2f}W I={powers[0].current:.2f}A U={powers[0].voltage:.2f}V')
         
         cuda_dev += 1
 
