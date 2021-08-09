@@ -5,7 +5,7 @@ import typing
 from .nvapi_api import NvAPI, NvPhysicalGpu, NV_GPU_THERMAL_SETTINGS, NVAPI_THERMAL_TARGET_ALL, NVAPI_THERMAL_TARGET_GPU, \
         NvAPI_ShortString, NV_GPU_CLOCK_FREQUENCIES_CURRENT_FREQ, NV_GPU_CLOCK_FREQUENCIES_BASE_CLOCK, NV_GPU_CLOCK_FREQUENCIES_BOOST_CLOCK, \
         NVAPI_GPU_PUBLIC_CLOCK_GRAPHICS, NVAPI_GPU_PUBLIC_CLOCK_MEMORY, NVAPI_GPU_PUBLIC_CLOCK_PROCESSOR, NVAPI_GPU_PUBLIC_CLOCK_VIDEO, \
-        NV_GPU_POWER_STATUS, FAN_COOLER_CONTROL_MODE, PerfCapReason
+        NV_GPU_POWER_STATUS, FAN_COOLER_CONTROL_MODE, PerfCapReason, RamType
 from .status import NvError
 
 class Delta(typing.NamedTuple):
@@ -246,3 +246,8 @@ class Gpu:
             if not maskClock.enabled:
                 continue
             print(f'{idx: 3d})VFP type={curveClock.type!s} volt={curveClock.voltage}V freq={curveClock.frequency}MHz | Boost type={tableClock.type!s} freqDelta={tableClock.freqDelta}MHz')
+
+    @property
+    def ram_type(self) -> RamType:
+        '''Returns RAM type of the GPU.'''
+        return self.api.get_ram_type(self.handle)

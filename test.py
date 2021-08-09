@@ -1,4 +1,3 @@
-import enum
 from pynvraw import api, NvError, get_phys_gpu
 
 def main():
@@ -73,8 +72,8 @@ def main():
             print(f'{idx=}\n{mc}\n{vc}\n{bc}')
         '''
 
-        gpu._show_boost_table()
-        #gpu.set_power_limit(80)
+        #gpu._show_boost_table()
+        print(f'RAM type: {gpu.ram_type!s}')
 
         #powerInfo = api.get_power_monitor_info(gpu.handle)
         #print(powerInfo)

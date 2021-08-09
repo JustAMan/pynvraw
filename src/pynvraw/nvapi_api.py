@@ -723,6 +723,22 @@ class NV_GPU_PERFORMANCE_STATUS(NvVersioned):
     def limit(self):
         return PerfCapReason(self._limit)
 
+class RamType(enum.IntEnum):
+    Unknown = 0
+    SDRAM = 1
+    DDR1 = 1
+    DDR2 = 3
+    GDDR2 = 4
+    GDDR3 = 5
+    GDDR4 = 6
+    DDR3 = 7
+    GDDR5 = 8
+    DDR2_alt = 9
+    GDDR5X = 10
+    HBM2 = 12
+    GDDR6 = 14
+    GDDR6X = 15
+
 class Method:
     def __init__(self, offset, restype, *argtypes):
         self.proto = ctypes.CFUNCTYPE(restype, *argtypes, use_errno=True, use_last_error=True)
@@ -787,6 +803,8 @@ class NvAPI:
     NvAPI_GPU_GetClockBoostTable = NvMethod(0x23F1B133, 'NvAPI_GPU_GetClockBoostTable', NvPhysicalGpu, ctypes.POINTER(NV_GPU_CLOCKBOOST_TABLE))
     NvAPI_GPU_SetClockBoostTable = NvMethod(0x733E009, 'NvAPI_GPU_SetClockBoostTable', NvPhysicalGpu, ctypes.POINTER(NV_GPU_CLOCKBOOST_TABLE))
     NvAPI_GPU_PerfPoliciesGetStatus = NvMethod(0x3D358A0C, 'NvAPI_GPU_PerfPoliciesGetStatus', NvPhysicalGpu, ctypes.POINTER(NV_GPU_PERFORMANCE_STATUS))
+
+    NvAPI_GPU_GetRamType = NvMethod(0x57F7CAAC, 'NvAPI_GPU_GetRamType', NvPhysicalGpu, ctypes.POINTER(ctypes.c_uint32))
 
     def __init__(self):
         self.NvAPI_Initialize()
@@ -952,3 +970,8 @@ class NvAPI:
         value = NV_GPU_PERFORMANCE_STATUS()
         self.NvAPI_GPU_PerfPoliciesGetStatus(dev, ctypes.pointer(value))
         return value.limit
+
+    def get_ram_type(self, dev: NvPhysicalGpu) -> RamType:
+        value = ctypes.c_uint32(0)
+        self.NvAPI_GPU_GetRamType(dev, ctypes.pointer(value))
+        return RamType(value.value)
