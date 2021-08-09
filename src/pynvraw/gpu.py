@@ -236,3 +236,13 @@ class Gpu:
     def perf_limit(self) -> PerfCapReason:
         '''Reads current performance cap reasons.'''
         return self.api.get_performance_limit(self.handle)
+
+    def _show_boost_table(self):
+        mask = self.api.get_boost_mask(self.handle)
+        curve = self.api.get_vfp_curve(self.handle, mask)
+        table = self.api.get_boost_table(self.handle, mask)
+
+        for idx, (maskClock, curveClock, tableClock) in enumerate(zip(mask.clocks, curve.clocks, table.clocks)):
+            if not maskClock.enabled:
+                continue
+            print(f'{idx: 3d})VFP type={curveClock.type!s} volt={curveClock.voltage}V freq={curveClock.frequency}MHz | Boost type={tableClock.type!s} freqDelta={tableClock.freqDelta}MHz')

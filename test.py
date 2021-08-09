@@ -1,3 +1,4 @@
+import enum
 from pynvraw import api, NvError, get_phys_gpu
 
 def main():
@@ -62,6 +63,17 @@ def main():
         print(f'power limit: {gpu.power_limit}%')
         print(f'current power: {gpu.power}%')
         print(f'perf limit: {gpu.perf_limit!s}')
+
+        '''
+        mask = api.get_boost_mask(gpu.handle)
+        vfp = api.get_vfp_curve(gpu.handle, mask)
+        boost = api.get_boost_table(gpu.handle, mask)
+
+        for idx, (mc, vc, bc) in enumerate(zip(mask.clocks, vfp.clocks, boost.clocks)):
+            print(f'{idx=}\n{mc}\n{vc}\n{bc}')
+        '''
+
+        gpu._show_boost_table()
         #gpu.set_power_limit(80)
 
         #powerInfo = api.get_power_monitor_info(gpu.handle)

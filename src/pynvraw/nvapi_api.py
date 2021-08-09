@@ -271,7 +271,7 @@ class ClockType(enum.IntEnum):
 
 class NV_GPU_PUBLIC_CLOCK_ID(enum.IntEnum):
     GRAPHICS = 0
-    MEMORY1 = 1
+    MEMORY = 1
     PROCESSOR = 2
     VIDEO = 3
     MEMORY2 = 4
@@ -643,37 +643,60 @@ class NV_GPU_VOLTAGE_STATUS(NvVersioned):
     def voltage(self):
         return self._voltage / 1000000.0
 
-class NV_GPU_BOOST_MASK(NvVersioned):
-    class CLOCK_BOOST_MASK(StrStructure):
-        _pack_ = 8
-        _fields_ = [('memoryDelta', ctypes.c_int32),
-                    ('gpuDelta', ctypes.c_int32),
-                    ('unknown', ctypes.c_uint32 * 4)]
+class NV_GPU_CLOCKBOOST_MASK(NvVersioned):
+    class NV_GPU_CLOCKBOOST_MASK_CLOCK(StrStructure):
+        _fields_ = [('_type', ctypes.c_uint32),
+                    ('enabled', ctypes.c_bool),
+                    ('reserved', ctypes.c_uint32 * 4)]
+        @property
+        def type(self):
+            return NV_GPU_PUBLIC_CLOCK_ID(self._type)
 
     _nv_version_ = 1
     _pack_ = 8
     _fields_ = [('version', ctypes.c_uint32),
                 ('masks', ctypes.c_uint32 * 16),
-                ('boostMasks', CLOCK_BOOST_MASK * 103),
-                ('unknown2', ctypes.c_uint32 * 912)]
+                ('clocks', NV_GPU_CLOCKBOOST_MASK_CLOCK * 255)]
 
-class NV_GPU_BOOST_TABLE(NvVersioned):
-    class NV_GPU_BOOST_TABLE_GPU_DELTA(StrStructure):
-        _fields_ = [('unknown1', ctypes.c_uint32 * 5),
+class NV_GPU_CLOCKBOOST_TABLE(NvVersioned):
+    class NV_GPU_CLOCKBOOST_TABLE_CLOCK(StrStructure):
+        _fields_ = [('_type', ctypes.c_uint32),
+                    ('reserved1', ctypes.c_uint32 * 4),
                     ('_freqDelta', ctypes.c_int32),
-                    ('unknown2', ctypes.c_uint32 * 3)]
+                    ('reserved2', ctypes.c_uint32 * 3)]
         @property
         def freqDelta(self):
             return self._freqDelta / 1000.0
+        @property
+        def type(self):
+            return NV_GPU_PUBLIC_CLOCK_ID(self._type)
 
     _nv_version_ = 1
     _pack_ = 8
     _fields_ = [('version', ctypes.c_uint32),
                 ('masks', ctypes.c_uint32 * 16),
-                ('gpuDelta', NV_GPU_BOOST_TABLE_GPU_DELTA * 80),
-                ('memoryFilled', ctypes.c_uint32 * 23),
-                ('memoryDeltas', ctypes.c_uint32 * 23),
-                ('reserved2', ctypes.c_uint32 * 1529)]
+                ('clocks', NV_GPU_CLOCKBOOST_TABLE_CLOCK * 255)]
+
+class NV_GPU_VFP_CURVE(NvVersioned):
+    class NV_GPU_VFP_CURVE_CLOCK(StrStructure):
+        _fields_ = [('_type', ctypes.c_uint32),
+                    ('_frequency', ctypes.c_uint32),
+                    ('_voltage', ctypes.c_uint32),
+                    ('reserved', ctypes.c_uint32 * 4)]
+        @property
+        def frequency(self):
+            return self._frequency / 1000.0
+        @property
+        def voltage(self):
+            return self._voltage / 1000000.0
+        @property
+        def type(self):
+            return NV_GPU_PUBLIC_CLOCK_ID(self._type)
+
+    _nv_version_ = 1
+    _fields_ = [('version', ctypes.c_uint32),
+                ('masks', ctypes.c_uint32 * 16),
+                ('clocks', NV_GPU_VFP_CURVE_CLOCK * 255)]
 
 class PerfCapReason(enum.IntFlag):
     NONE = 0
@@ -758,9 +781,11 @@ class NvAPI:
     NvAPI_GPU_ClientFanCoolersSetControl = NvMethod(0xA58971A5, 'NvAPI_GPU_ClientFanCoolersSetControl', NvPhysicalGpu, ctypes.POINTER(NV_GPU_FAN_COOLERS_CONTROL))
 
     NvAPI_GPU_GetCurrentVoltage = NvMethod(0x465F9BCF, 'NvAPI_GPU_GetCurrentVoltage', NvPhysicalGpu, ctypes.POINTER(NV_GPU_VOLTAGE_STATUS))
-    NvAPI_GPU_GetClockBoostTable = NvMethod(0x23F1B133, 'NvAPI_GPU_GetClockBoostTable', NvPhysicalGpu, ctypes.POINTER(NV_GPU_BOOST_TABLE))
-    NvAPI_GPU_GetClockBoostMask = NvMethod(0x507B4B59, 'NvAPI_GPU_GetClockBoostMask', NvPhysicalGpu, ctypes.POINTER(NV_GPU_BOOST_MASK))
 
+    NvAPI_GPU_GetClockBoostMask = NvMethod(0x507B4B59, 'NvAPI_GPU_GetClockBoostMask', NvPhysicalGpu, ctypes.POINTER(NV_GPU_CLOCKBOOST_MASK))
+    NvAPI_GPU_GetVFPCurve = NvMethod(0x21537AD4, 'NvAPI_GPU_GetVFPCurve', NvPhysicalGpu, ctypes.POINTER(NV_GPU_VFP_CURVE))
+    NvAPI_GPU_GetClockBoostTable = NvMethod(0x23F1B133, 'NvAPI_GPU_GetClockBoostTable', NvPhysicalGpu, ctypes.POINTER(NV_GPU_CLOCKBOOST_TABLE))
+    NvAPI_GPU_SetClockBoostTable = NvMethod(0x733E009, 'NvAPI_GPU_SetClockBoostTable', NvPhysicalGpu, ctypes.POINTER(NV_GPU_CLOCKBOOST_TABLE))
     NvAPI_GPU_PerfPoliciesGetStatus = NvMethod(0x3D358A0C, 'NvAPI_GPU_PerfPoliciesGetStatus', NvPhysicalGpu, ctypes.POINTER(NV_GPU_PERFORMANCE_STATUS))
 
     def __init__(self):
@@ -904,16 +929,23 @@ class NvAPI:
         self.NvAPI_GPU_GetCurrentVoltage(dev, ctypes.pointer(value))
         return value.voltage
 
-    def get_boost_table(self, dev: NvPhysicalGpu, boost_mask: NV_GPU_BOOST_MASK) -> NV_GPU_BOOST_TABLE:
-        value = NV_GPU_BOOST_TABLE()
+    def get_boost_mask(self, dev: NvPhysicalGpu) -> NV_GPU_CLOCKBOOST_MASK:
+        value = NV_GPU_CLOCKBOOST_MASK()
+        self.NvAPI_GPU_GetClockBoostMask(dev, ctypes.pointer(value))
+        return value
+
+    def get_boost_table(self, dev: NvPhysicalGpu, boost_mask: NV_GPU_CLOCKBOOST_MASK) -> NV_GPU_CLOCKBOOST_TABLE:
+        value = NV_GPU_CLOCKBOOST_TABLE()
         for i, m in enumerate(boost_mask.masks):
             value.masks[i] = m
         self.NvAPI_GPU_GetClockBoostTable(dev, ctypes.pointer(value))
         return value
 
-    def get_boost_mask(self, dev: NvPhysicalGpu) -> NV_GPU_BOOST_MASK:
-        value = NV_GPU_BOOST_MASK()
-        self.NvAPI_GPU_GetClockBoostMask(dev, ctypes.pointer(value))
+    def get_vfp_curve(self, dev: NvPhysicalGpu, boost_mask: NV_GPU_CLOCKBOOST_MASK) -> NV_GPU_VFP_CURVE:
+        value = NV_GPU_VFP_CURVE()
+        for i, m in enumerate(boost_mask.masks):
+            value.masks[i] = m
+        self.NvAPI_GPU_GetVFPCurve(dev, ctypes.pointer(value))
         return value
 
     def get_performance_limit(self, dev: NvPhysicalGpu) -> PerfCapReason:
