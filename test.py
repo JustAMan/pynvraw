@@ -12,6 +12,7 @@ def main():
         print(f'{gpu.name}: core={gpu.core_temp} hotspot={gpu.hotspot_temp} vram={gpu.vram_temp}')
         print(f'{gpu.name}: fan={gpu.fan}%')
 
+        '''
         try:
             v2 = api.get_coolers_info(gpu.handle)
         except NvError as ex:
@@ -23,6 +24,7 @@ def main():
             print(v2)
             print(api.get_coolers_status(gpu.handle))
             print(api.get_coolers_control(gpu.handle))
+        '''
 
         #if '3090' in gpu.name:
         #    gpu.fan = 85
@@ -89,6 +91,10 @@ def main():
             elif powers:
                 print(f'{rail!s}: P={powers[0].power:.2f}W I={powers[0].current:.2f}A U={powers[0].voltage:.2f}V')
         
+        #mon_info = api.get_power_monitor_info(gpu.handle)
+        #mon_stat = api.get_power_monitor_status(gpu.handle, mon_info)
+        #print(mon_info)
+        #print(mon_stat)
         cuda_dev += 1
 
 if __name__ == '__main__':

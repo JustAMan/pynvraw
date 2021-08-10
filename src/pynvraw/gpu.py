@@ -65,7 +65,7 @@ class Gpu:
     @property
     def vram_temp(self) -> typing.Union[float, None]:
         '''Reads memory thermal sensor in Celsius if present, None otherwise.'''
-        candidates = [c for c in self._get_temp(9, 10) if c is not None]
+        candidates = [c for c in self._get_temp(8, 9) if c is not None]
         return max(candidates) if candidates else None
 
     @property
