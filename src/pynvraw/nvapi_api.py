@@ -735,7 +735,7 @@ class NV_GPU_PERFORMANCE_STATUS(NvVersioned):
 class RamType(enum.IntEnum):
     Unknown = 0
     SDRAM = 1
-    DDR1 = 1
+    DDR1 = 2
     DDR2 = 3
     GDDR2 = 4
     GDDR3 = 5
