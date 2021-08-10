@@ -742,7 +742,7 @@ class RamType(enum.IntEnum):
     GDDR4 = 6
     DDR3 = 7
     GDDR5 = 8
-    DDR2_alt = 9
+    LPDDR2 = 9
     GDDR5X = 10
     HBM2 = 12
     GDDR6 = 14
