@@ -323,6 +323,9 @@ class NV_GPU_PERF_PSTATES20_INFO(NvVersioned):
             @property
             def domainId(self):
                 return NV_GPU_PUBLIC_CLOCK_ID(self._domainId)
+            @domainId.setter
+            def domainId(self, value):
+                self._domainId = int(value)
             @property
             def typeId(self):
                 return ClockType(self._typeId)

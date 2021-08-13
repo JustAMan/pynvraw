@@ -180,13 +180,13 @@ class Gpu:
         states = self.api.get_pstates(self.handle)
         assert states.numPstates > 0 and states.pstates[0].bIsEditable
         states.numPstates = 1
-        p0 = states.pstates[0]
+        p0 = states._pstates[0]
         clockIdx = 0
         for domainId, domainName in domains.items():
             value = getattr(delta, domainName, None)
             if value is None:
                 continue
-            clock = p0.clocks[clockIdx]
+            clock = p0._clocks[clockIdx]
             if value * 1000 < clock.freqDelta_kHz.valueMin or value * 1000 > clock.freqDelta_kHz.valueMax:
                 raise ValueError(f'Value for {domainName} ({value}) is out of range ({clock.freqDelta_kHz.valueMin/1000}-{clock.freqDelta_kHz.valueMax/1000})')
             clock.freqDelta_kHz.value = int(value * 1000)
