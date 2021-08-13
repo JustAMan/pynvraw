@@ -279,14 +279,6 @@ class NV_GPU_PUBLIC_CLOCK_ID(enum.IntEnum):
 
 class NV_GPU_PERF_PSTATES20_INFO(NvVersioned):
     class _NV_GPU_PSTATE(StrStructure):
-        def __init__(self):
-            super().__init__()
-            self.__numClocks = NVAPI_MAX_GPU_PSTATE20_CLOCKS
-            self.__numVoltages = NVAPI_MAX_GPU_PSTATE20_BASE_VOLTAGES
-        def _setNums(self, numClocks, numVoltages):
-            self.__numClocks = numClocks
-            self.__numVoltages = numVoltages
-
         class NV_GPU_PSTATE20_CLOCK_ENTRY_V1(StrStructure):
             class _NV_GPU_PSTATE_DATA_U(StrUnion):
                 class _NV_GPU_PSTATE_DATA_RANGE(StrStructure):
@@ -323,9 +315,6 @@ class NV_GPU_PERF_PSTATES20_INFO(NvVersioned):
             @property
             def domainId(self):
                 return NV_GPU_PUBLIC_CLOCK_ID(self._domainId)
-            @domainId.setter
-            def domainId(self, value):
-                self._domainId = int(value)
             @property
             def typeId(self):
                 return ClockType(self._typeId)
@@ -340,12 +329,21 @@ class NV_GPU_PERF_PSTATES20_INFO(NvVersioned):
                     ('reserved', ctypes.c_uint32, 31),
                     ('_clocks', NV_GPU_PSTATE20_CLOCK_ENTRY_V1 * NVAPI_MAX_GPU_PSTATE20_CLOCKS),
                     ('_baseVoltages', NV_GPU_PSTATE20_BASE_VOLTAGE_ENTRY_V1 * NVAPI_MAX_GPU_PSTATE20_BASE_VOLTAGES)]
+        def _get_nums_from_parent_pstate20(self):
+            pstates_array = self._b_base_
+            if pstates_array is None:
+                return NVAPI_MAX_GPU_PSTATE20_CLOCKS, NVAPI_MAX_GPU_PSTATE20_BASE_VOLTAGES
+            pstate20 = pstates_array._b_base_
+            if pstate20 is None or not isinstance(pstate20, NV_GPU_PERF_PSTATES20_INFO):
+                return NVAPI_MAX_GPU_PSTATE20_CLOCKS, NVAPI_MAX_GPU_PSTATE20_BASE_VOLTAGES
+            return pstate20.numClocks, pstate20.numBaseVoltages
+
         @property
         def clocks(self):
-            return self._clocks[:self.__numClocks]
+            return self._clocks[:self._get_nums_from_parent_pstate20()[0]]
         @property
         def baseVoltages(self):
-            return self._baseVoltages[:self.__numVoltages]
+            return self._baseVoltages[:self._get_nums_from_parent_pstate20()[1]]
 
     class _NV_GPU_OVERVOLT(StrStructure):
         _fields_ = [('numVoltages', ctypes.c_uint32),
@@ -365,10 +363,7 @@ class NV_GPU_PERF_PSTATES20_INFO(NvVersioned):
                 ('ov', _NV_GPU_OVERVOLT)]
     @property
     def pstates(self):
-        result = self._pstates[:self.numPstates]
-        for p in result:
-            p._setNums(self.numClocks, self.numBaseVoltages)
-        return result
+        return self._pstates[:self.numPstates]
 
 class _NV_GPU_POWER_INFO_ENTRY(StrStructure):
     _fields_ = [('pstate', ctypes.c_uint32),

@@ -97,5 +97,14 @@ def main():
         #print(mon_stat)
         cuda_dev += 1
 
+def main2():
+    import pynvraw.nvapi_api as na
+    for name in dir(na):
+        if name == 'NvVersioned':
+            continue
+        obj = getattr(na, name)
+        if isinstance(obj, type) and issubclass(obj, na.NvVersioned):
+            print(f'{name}: version={hex(obj().version)}')
+
 if __name__ == '__main__':
-    main()
+    main2()

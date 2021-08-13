@@ -181,7 +181,7 @@ class Gpu:
         assert states.numPstates > 0 and states.pstates[0].bIsEditable
         p0 = states.pstates[0]
 
-        for clock in p0._clocks[:states.numClocks]:
+        for clock in p0.clocks:
             domainName = domains.get(clock.domainId, None)
             if domainName is None:
                 continue
@@ -191,6 +191,7 @@ class Gpu:
             if value * 1000 < clock.freqDelta_kHz.valueMin or value * 1000 > clock.freqDelta_kHz.valueMax:
                 raise ValueError(f'Value for {domainName} ({value}) is out of range ({clock.freqDelta_kHz.valueMin/1000}-{clock.freqDelta_kHz.valueMax/1000})')
             clock.freqDelta_kHz.value = int(value * 1000)
+        states.numPstates = 1
         self.api.NvAPI_GPU_SetPstates20(self.handle, ctypes.pointer(states))
 
     @property
