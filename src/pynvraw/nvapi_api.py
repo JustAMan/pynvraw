@@ -365,7 +365,7 @@ class NV_GPU_PERF_PSTATES20_INFO(NvVersioned):
                 ('ov', _NV_GPU_OVERVOLT)]
     @property
     def pstates(self):
-        result = list(self._pstates[:self.numPstates])
+        result = self._pstates[:self.numPstates]
         for p in result:
             p._setNums(self.numClocks, self.numBaseVoltages)
         return result
