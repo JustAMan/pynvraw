@@ -250,3 +250,21 @@ class Gpu:
     def ram_type(self) -> RamType:
         '''Returns RAM type of the GPU.'''
         return self.api.get_ram_type(self.handle)
+
+    @property
+    def memory_used(self) -> float:
+        '''Returns MB of dedicated memory currently occupied.'''
+        info = self.api.get_memory_info(self.handle)
+        return info.availableDedicatedVideoMemory - info.currentAvailableDedicatedVideoMemory
+
+    @property
+    def memory_total(self) -> float:
+        '''Returns MB of dedicated memory installed on the card.'''
+        info = self.api.get_memory_info(self.handle)
+        return info.availableDedicatedVideoMemory
+
+    @property
+    def memory_available(self) -> float:
+        '''Returns MB of free dedicated memory.'''
+        info = self.api.get_memory_info(self.handle)
+        return info.currentAvailableDedicatedVideoMemory

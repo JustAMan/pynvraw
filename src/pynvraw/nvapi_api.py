@@ -68,23 +68,25 @@ class StrMixin:
         return str(obj)
     def as_dict(self):
         result = collections.OrderedDict(__name__=self.__class__.__name__)
-        for fld in self._fields_:
-            name = fld[0]
-            if name.startswith('reserved'):
-                continue
-            if name.startswith('_') and hasattr(self, name[1:]):
-                name = name[1:]
-            value = getattr(self, name)
-            if value is None:
-                continue
-            if isinstance(value, (list, tuple, ctypes.Array)):
-                if len(value) == 0:
-                    value = '[]'
-                elif isinstance(value[0], (int, float, str, ctypes._SimpleCData)):
-                    value = f'[{", ".join(map(str, value))}]'
-                else:
-                    value = [self._cast(e) for e in value]
-            result[name] = value
+        for base in reversed(self.__class__.__mro__):
+            fields = getattr(base, '_fields_', [])
+            for fld in fields:
+                name = fld[0]
+                if name.startswith('reserved'):
+                    continue
+                if name.startswith('_') and hasattr(self, name[1:]):
+                    name = name[1:]
+                value = getattr(self, name)
+                if value is None:
+                    continue
+                if isinstance(value, (list, tuple, ctypes.Array)):
+                    if len(value) == 0:
+                        value = '[]'
+                    elif isinstance(value[0], (int, float, str, ctypes._SimpleCData)):
+                        value = f'[{", ".join(map(str, value))}]'
+                    else:
+                        value = [self._cast(e) for e in value]
+                result[name] = value
         return result
 
 class StrStructure(StrMixin, ctypes.Structure):
@@ -746,6 +748,41 @@ class RamType(enum.IntEnum):
     GDDR6 = 14
     GDDR6X = 15
 
+class DisplayDriverMemoryInfoV1(NvVersioned):
+    _nv_version_ = 1
+    _fields_ = [('version', ctypes.c_uint32),
+                ('_dedicatedVideoMemory', ctypes.c_uint32),
+                ('_availableDedicatedVideoMemory', ctypes.c_uint32),
+                ('_systemVideoMemory', ctypes.c_uint32),
+                ('_sharedSystemMemory', ctypes.c_uint32)]
+    @property
+    def dedicatedVideoMemory(self):
+        return self._dedicatedVideoMemory / 1024
+    @property
+    def availableDedicatedVideoMemory(self):
+        return self._availableDedicatedVideoMemory / 1024
+    @property
+    def systemVideoMemory(self):
+        return self._systemVideoMemory / 1024
+    @property
+    def sharedSystemMemory(self):
+        return self._sharedSystemMemory / 1024
+
+class DisplayDriverMemoryInfoV2(DisplayDriverMemoryInfoV1):
+    _nv_version_ = 2
+    _fields_ = [('_currentAvailableDedicatedVideoMemory', ctypes.c_uint32)]
+    @property
+    def currentAvailableDedicatedVideoMemory(self):
+        return self._currentAvailableDedicatedVideoMemory / 1024
+
+class DisplayDriverMemoryInfoV3(DisplayDriverMemoryInfoV2):
+    _nv_version_ = 3
+    _fields_ = [('_dedicatedVideoMemoryEvictionsSize', ctypes.c_uint32),
+                ('dedicatedVideoMemoryEvictionCount', ctypes.c_uint32)]
+    @property
+    def dedicatedVideoMemoryEvictionsSize(self):
+        return self._dedicatedVideoMemoryEvictionsSize / 1024
+
 class Method:
     def __init__(self, offset, restype, *argtypes):
         self.proto = ctypes.CFUNCTYPE(restype, *argtypes, use_errno=True, use_last_error=True)
@@ -812,6 +849,10 @@ class NvAPI:
     NvAPI_GPU_PerfPoliciesGetStatus = NvMethod(0x3D358A0C, 'NvAPI_GPU_PerfPoliciesGetStatus', NvPhysicalGpu, ctypes.POINTER(NV_GPU_PERFORMANCE_STATUS))
 
     NvAPI_GPU_GetRamType = NvMethod(0x57F7CAAC, 'NvAPI_GPU_GetRamType', NvPhysicalGpu, ctypes.POINTER(ctypes.c_uint32))
+
+    NvAPI_RestartDisplayDriver = NvMethod(0xB4B26B65, 'NvAPI_RestartDisplayDriver')
+
+    NvAPI_GPU_GetMemoryInfo = NvMethod(0x7F9B368, 'NvAPI_GPU_GetMemoryInfo', NvPhysicalGpu, ctypes.POINTER(DisplayDriverMemoryInfoV1))
 
     def __init__(self):
         self.NvAPI_Initialize()
@@ -982,3 +1023,15 @@ class NvAPI:
         value = ctypes.c_uint32(0)
         self.NvAPI_GPU_GetRamType(dev, ctypes.pointer(value))
         return RamType(value.value)
+
+    def get_memory_info(self, dev: NvPhysicalGpu) -> typing.Union[DisplayDriverMemoryInfoV3, DisplayDriverMemoryInfoV2, DisplayDriverMemoryInfoV1]:
+        for klass in (DisplayDriverMemoryInfoV3, DisplayDriverMemoryInfoV2, DisplayDriverMemoryInfoV1):
+            value = klass()
+            try:
+                self.NvAPI_GPU_GetMemoryInfo(dev, ctypes.pointer(value))
+            except NvError as ex:
+                if ex == 'NVAPI_INCOMPATIBLE_STRUCT_VERSION':
+                    continue
+                raise
+            return value
+        raise NvError('Not found suitable memory info struct', 'NVAPI_INCOMPATIBLE_STRUCT_VERSION')

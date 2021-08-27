@@ -1,4 +1,4 @@
-from pynvraw import api, NvError, get_phys_gpu
+from pynvraw import api, NvError, get_phys_gpu, nvapi_api
 
 def main():
     print(api.get_driver_version())
@@ -95,6 +95,9 @@ def main():
         #mon_stat = api.get_power_monitor_status(gpu.handle, mon_info)
         #print(mon_info)
         #print(mon_stat)
+        info = api.get_memory_info(gpu.handle)
+        print(info)
+        print(f'{gpu.memory_used=} MB / {gpu.memory_total=} MB')
         cuda_dev += 1
 
 def main2():
@@ -107,4 +110,4 @@ def main2():
             print(f'{name}: version={hex(obj().version)}')
 
 if __name__ == '__main__':
-    main2()
+    main()
