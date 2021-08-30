@@ -21,6 +21,7 @@ NVAPI_THERMAL_TARGET_GPU = 1
 NVAPI_THERMAL_TARGET_ALL = 15
 
 NVAPI_SHORT_STRING_MAX = 64
+NVAPI_LONG_STRING_MAX = 256
 
 NVAPI_COOLER_POLICY_USER = 1
 NVAPI_MAX_GPU_PUBLIC_CLOCKS = 32
@@ -40,7 +41,10 @@ NVAPI_MAX_GPU_PSTATE20_BASE_VOLTAGES = 4
 
 NVAPI_MAX_GPU_TOPOLOGY_ENTRIES = 4
 
+NVAPI_MAX_NUMBER_OF_APPLICATIONS = 128
+
 NvAPI_ShortString = ctypes.c_char * NVAPI_SHORT_STRING_MAX
+NvAPI_LongString = ctypes.c_char * NVAPI_LONG_STRING_MAX
 
 class StrMixin:
     def __str__(self):
@@ -68,6 +72,7 @@ class StrMixin:
         return str(obj)
     def as_dict(self):
         result = collections.OrderedDict(__name__=self.__class__.__name__)
+        shown = []
         for base in reversed(self.__class__.__mro__):
             fields = getattr(base, '_fields_', [])
             for fld in fields:
@@ -76,17 +81,24 @@ class StrMixin:
                     continue
                 if name.startswith('_') and hasattr(self, name[1:]):
                     name = name[1:]
-                value = getattr(self, name)
-                if value is None:
-                    continue
-                if isinstance(value, (list, tuple, ctypes.Array)):
-                    if len(value) == 0:
-                        value = '[]'
-                    elif isinstance(value[0], (int, float, str, ctypes._SimpleCData)):
-                        value = f'[{", ".join(map(str, value))}]'
-                    else:
-                        value = [self._cast(e) for e in value]
-                result[name] = value
+                if name not in shown:
+                    shown.append(name)
+            for name, value in base.__dict__.items():
+                if isinstance(value, property) and name not in shown:
+                    shown.append(name)
+            
+        for name in shown:
+            value = getattr(self, name)
+            if value is None:
+                continue
+            if isinstance(value, (list, tuple, ctypes.Array)):
+                if len(value) == 0:
+                    value = '[]'
+                elif isinstance(value[0], (int, float, str, ctypes._SimpleCData)):
+                    value = f'[{", ".join(map(str, value))}]'
+                else:
+                    value = [self._cast(e) for e in value]
+            result[name] = value
         return result
 
 class StrStructure(StrMixin, ctypes.Structure):
@@ -277,7 +289,28 @@ class NV_GPU_PUBLIC_CLOCK_ID(enum.IntEnum):
     PROCESSOR = 2
     VIDEO = 3
     MEMORY2 = 4
-    UNDEFINED = 5
+    UNDEFINED1 = 5
+    UNDEFINED2 = 6
+
+class PerformanceStateId(enum.IntEnum):
+    P0_3DPerformance = 0
+    P1_3DPerformance = 1
+    P2_Balanced = 2
+    P3_Balanced = 3
+    P4 = 4
+    P5 = 5
+    P6 = 6
+    P7 = 7
+    P8_HDVideoPlayback = 8
+    P9 = 9
+    P10_DVDPlayback = 10
+    P11 = 11
+    P12_Idle = 12
+    P13 = 13
+    P14 = 14
+    P15 = 15
+    Undefined = NVAPI_MAX_GPU_PSTATE20_PSTATES
+    All = 16
 
 class NV_GPU_PERF_PSTATES20_INFO(NvVersioned):
     class _NV_GPU_PSTATE(StrStructure):
@@ -326,7 +359,7 @@ class NV_GPU_PERF_PSTATES20_INFO(NvVersioned):
                         ClockType.RANGE: 'range'}[self.typeId]
                 return getattr(self._data, attr)
 
-        _fields_ = [('pstateId', ctypes.c_int),
+        _fields_ = [('_pstateId', ctypes.c_int),
                     ('bIsEditable', ctypes.c_uint32, 1),
                     ('reserved', ctypes.c_uint32, 31),
                     ('_clocks', NV_GPU_PSTATE20_CLOCK_ENTRY_V1 * NVAPI_MAX_GPU_PSTATE20_CLOCKS),
@@ -340,6 +373,9 @@ class NV_GPU_PERF_PSTATES20_INFO(NvVersioned):
                 return NVAPI_MAX_GPU_PSTATE20_CLOCKS, NVAPI_MAX_GPU_PSTATE20_BASE_VOLTAGES
             return pstate20.numClocks, pstate20.numBaseVoltages
 
+        @property
+        def pstateId(self):
+            return PerformanceStateId(self._pstateId)
         @property
         def clocks(self):
             return self._clocks[:self._get_nums_from_parent_pstate20()[0]]
@@ -383,7 +419,10 @@ class NV_GPU_POWER_INFO(NvVersioned):
                 ('valid', ctypes.c_uint8),
                 ('count', ctypes.c_uint8),
                 ('padding', ctypes.c_uint8 * 2),
-                ('entries', _NV_GPU_POWER_INFO_ENTRY * 4)]
+                ('_entries', _NV_GPU_POWER_INFO_ENTRY * 4)]
+    @property
+    def entries(self):
+        return self._entries[:self.count]
 
 class _NV_GPU_POWER_STATUS_ENTRY(StrStructure):
     _fields_ = [('pad0', ctypes.c_uint32),
@@ -395,7 +434,10 @@ class NV_GPU_POWER_STATUS(NvVersioned):
     _nv_version_ = 1
     _fields_ = [('version', ctypes.c_uint32),
                 ('count', ctypes.c_uint32),
-                ('entries', _NV_GPU_POWER_STATUS_ENTRY * 4)]
+                ('_entries', _NV_GPU_POWER_STATUS_ENTRY * 4)]
+    @property
+    def entries(self):
+        return self._entries[:self.count]
 
 class NV_GPU_TOPOLOGY_ENTRY(StrStructure):
     _fields_ = [('domain', ctypes.c_int),
@@ -410,7 +452,10 @@ class NV_GPU_TOPOLOGY_STATUS(NvVersioned):
     _nv_version_ = 1
     _fields_ = [('version', ctypes.c_uint32),
                 ('count', ctypes.c_uint32),
-                ('entries', NV_GPU_TOPOLOGY_ENTRY * NVAPI_MAX_GPU_TOPOLOGY_ENTRIES)]
+                ('_entries', NV_GPU_TOPOLOGY_ENTRY * NVAPI_MAX_GPU_TOPOLOGY_ENTRIES)]
+    @property
+    def entries(self):
+        return self._entries[:self.count]
 
 class PowerChannelType(enum.IntEnum):
     DEFAULT = 0
@@ -783,6 +828,78 @@ class DisplayDriverMemoryInfoV3(DisplayDriverMemoryInfoV2):
     def dedicatedVideoMemoryEvictionsSize(self):
         return self._dedicatedVideoMemoryEvictionsSize / 1024
 
+class ClockLockMode(enum.IntEnum):
+    NONE = 0
+    MANUAL = 3
+
+class PrivateClockBoostLockV2(NvVersioned):
+    class ClockBoostLock(StrStructure):
+        _fields_ = [('_domain', ctypes.c_uint32),
+                    ('reserved1', ctypes.c_uint32),
+                    ('_lockMode', ctypes.c_uint32),
+                    ('reserved2', ctypes.c_uint32),
+                    ('_voltage', ctypes.c_uint32),
+                    ('reserved3', ctypes.c_uint32)]
+
+        @property
+        def domain(self):
+            return NV_GPU_PUBLIC_CLOCK_ID(self._domain)
+        @property
+        def lockMode(self):
+            return ClockLockMode(self._lockMode)
+        @property
+        def voltage(self):
+            return self._voltage / 1e6
+    _nv_version_ = 2
+    _fields_ = [('version', ctypes.c_uint32),
+                ('reserved', ctypes.c_uint32),
+                ('count', ctypes.c_uint32),
+                ('_locks', ClockBoostLock * NVAPI_MAX_GPU_PUBLIC_CLOCKS)
+    ]
+    @property
+    def locks(self):
+        return self._locks[:self.count]
+
+class UtilizationDomain(enum.IntEnum):
+    GPU = 0
+    FrameBuffer = 1
+    VideoEngine = 2
+    BusInterface = 3
+
+class DynamicPerformanceStatesInfoV1(NvVersioned):
+    class UtilizationDomainInfo(StrStructure):
+        _fields_ = [('_present', ctypes.c_uint32),
+                    ('percent', ctypes.c_uint32)]
+        @property
+        def present(self):
+            return bool(self._present & 0b1)
+
+    _nv_version_ = 1
+    _fields_ = [('version', ctypes.c_uint32),
+                ('_flags', ctypes.c_uint32),
+                ('_utilization', UtilizationDomainInfo * 8)]
+    @property
+    def is_dynamic_pstate_enabled(self):
+        return bool(self._flags & 0b1)
+    @property
+    def utilization(self):
+        return {domain: self._utilization[domain.value] for domain in UtilizationDomain.__members__.values()}
+
+class PrivateActiveApplicationV2(NvVersioned):
+    _nv_version_ = 2
+    _fields_ = [('version', ctypes.c_uint32),
+                ('pid', ctypes.c_uint32),
+                ('_name', NvAPI_LongString)]
+    @property
+    def name(self):
+        return self._name.decode('utf8')
+
+class PrivateActiveApplicationArray(PrivateActiveApplicationV2 * NVAPI_MAX_NUMBER_OF_APPLICATIONS):
+    def __init__(self):
+        super().__init__()
+        for app in self:
+            app.__init__()
+
 class Method:
     def __init__(self, offset, restype, *argtypes):
         self.proto = ctypes.CFUNCTYPE(restype, *argtypes, use_errno=True, use_last_error=True)
@@ -848,11 +965,16 @@ class NvAPI:
     NvAPI_GPU_SetClockBoostTable = NvMethod(0x733E009, 'NvAPI_GPU_SetClockBoostTable', NvPhysicalGpu, ctypes.POINTER(NV_GPU_CLOCKBOOST_TABLE))
     NvAPI_GPU_PerfPoliciesGetStatus = NvMethod(0x3D358A0C, 'NvAPI_GPU_PerfPoliciesGetStatus', NvPhysicalGpu, ctypes.POINTER(NV_GPU_PERFORMANCE_STATUS))
 
-    NvAPI_GPU_GetRamType = NvMethod(0x57F7CAAC, 'NvAPI_GPU_GetRamType', NvPhysicalGpu, ctypes.POINTER(ctypes.c_uint32))
-
     NvAPI_RestartDisplayDriver = NvMethod(0xB4B26B65, 'NvAPI_RestartDisplayDriver')
 
+    NvAPI_GPU_GetRamType = NvMethod(0x57F7CAAC, 'NvAPI_GPU_GetRamType', NvPhysicalGpu, ctypes.POINTER(ctypes.c_uint32))
     NvAPI_GPU_GetMemoryInfo = NvMethod(0x7F9B368, 'NvAPI_GPU_GetMemoryInfo', NvPhysicalGpu, ctypes.POINTER(DisplayDriverMemoryInfoV1))
+
+    NvAPI_GPU_GetClockBoostLock = NvMethod(0xE440B867, 'NvAPI_GPU_GetClockBoostLock', NvPhysicalGpu, ctypes.POINTER(PrivateClockBoostLockV2))
+    NvAPI_GPU_GetCurrentPstate = NvMethod(0x927DA4F6, 'NvAPI_GPU_GetCurrentPstate', NvPhysicalGpu, ctypes.POINTER(ctypes.c_int))
+    NvAPI_GPU_GetDynamicPstatesInfoEx = NvMethod(0x60DED2ED, 'NvAPI_GPU_GetDynamicPstatesInfoEx', NvPhysicalGpu, ctypes.POINTER(DynamicPerformanceStatesInfoV1))
+
+    NvAPI_GPU_QueryActiveApps = NvMethod(0x65B1C5F5, 'NvAPI_GPU_QueryActiveApps', NvPhysicalGpu, PrivateActiveApplicationArray, ctypes.POINTER(ctypes.c_uint32))
 
     def __init__(self):
         self.NvAPI_Initialize()
@@ -1035,3 +1157,24 @@ class NvAPI:
                 raise
             return value
         raise NvError('Not found suitable memory info struct', 'NVAPI_INCOMPATIBLE_STRUCT_VERSION')
+
+    def get_clocklock(self, dev: NvPhysicalGpu) -> PrivateClockBoostLockV2:
+        value = PrivateClockBoostLockV2()
+        self.NvAPI_GPU_GetClockBoostLock(dev, ctypes.pointer(value))
+        return value
+
+    def get_current_pstate(self, dev: NvPhysicalGpu) -> PerformanceStateId:
+        value = ctypes.c_int()
+        self.NvAPI_GPU_GetCurrentPstate(dev, ctypes.pointer(value))
+        return PerformanceStateId(value.value)
+
+    def get_dynamic_pstates_info(self, dev: NvPhysicalGpu) -> DynamicPerformanceStatesInfoV1:
+        value = DynamicPerformanceStatesInfoV1()
+        self.NvAPI_GPU_GetDynamicPstatesInfoEx(dev, ctypes.pointer(value))
+        return value
+
+    def get_active_apps(self, dev: NvPhysicalGpu) -> typing.Tuple[PrivateActiveApplicationV2]:
+        count = ctypes.c_uint32()
+        apps = PrivateActiveApplicationArray()
+        self.NvAPI_GPU_QueryActiveApps(dev, apps, ctypes.pointer(count))
+        return tuple(apps[:count.value])

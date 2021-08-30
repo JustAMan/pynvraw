@@ -42,11 +42,14 @@ def main():
         #gpu.fan = 50
 
         pinfo = api.get_power_info(gpu.handle)
-        print(f'power info: valid={pinfo.valid} count={pinfo.count}')
-        for entry in pinfo.entries[:pinfo.count]:
-            print(f'\tpstate={entry.pstate}, min={entry.min_power/1000}%, def={entry.def_power/1000}%, max={entry.max_power/1000}%')
+        print(f'power info: {pinfo}')
+        #print(f'power info: valid={pinfo.valid} count={pinfo.count}')
+        #for entry in pinfo.entries[:pinfo.count]:
+        #    print(f'\tpstate={entry.pstate}, min={entry.min_power/1000}%, def={entry.def_power/1000}%, max={entry.max_power/1000}%')
         pstates = api.get_pstates(gpu.handle)
         #print(pstates)
+        print(f'PState: {api.get_current_pstate(gpu.handle)!s}')
+        print(f'Dynamic pstates info: {api.get_dynamic_pstates_info(gpu.handle)!s}')
         print(f'Voltage: {api.get_core_voltage(gpu.handle)}V')
         #bmask = api.get_boost_mask(gpu.handle)
         #print(f'Boost mask:\n{bmask}')
@@ -98,6 +101,9 @@ def main():
         info = api.get_memory_info(gpu.handle)
         print(info)
         print(f'{gpu.memory_used=} MB / {gpu.memory_total=} MB')
+        print(f'clock lock: {api.get_clocklock(gpu.handle)!s}')
+
+        print(f'Active apps:\n{api.get_active_apps(gpu.handle)}')
         cuda_dev += 1
 
 def main2():
@@ -108,6 +114,20 @@ def main2():
         obj = getattr(na, name)
         if isinstance(obj, type) and issubclass(obj, na.NvVersioned):
             print(f'{name}: version={hex(obj().version)}')
+
+def main3():
+    import time
+    gpu = get_phys_gpu(1)
+    sensor_hint = None
+    try:
+        while True:
+            sensor_hint, temps = api.read_thermal_sensors(gpu.handle, sensor_hint)
+            perf_cap = gpu.perf_limit
+            temps = ", ".join(f'{t:.2f}' for t in temps)
+            print(f'{time.asctime()}, {perf_cap!s}, {temps}')
+            time.sleep(0.5)
+    except KeyboardInterrupt:
+        pass
 
 if __name__ == '__main__':
     main()
