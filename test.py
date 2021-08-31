@@ -123,7 +123,7 @@ def main3():
         while True:
             sensor_hint, temps = api.read_thermal_sensors(gpu.handle, sensor_hint)
             perf_cap = gpu.perf_limit
-            temps = ", ".join(f'{t:.2f}' for t in temps)
+            temps = ", ".join(f'{t:.2f}' for t in temps[:sensor_hint])
             print(f'{time.asctime()}, {perf_cap!s}, {temps}')
             time.sleep(0.5)
     except KeyboardInterrupt:

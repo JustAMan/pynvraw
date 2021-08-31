@@ -1024,7 +1024,7 @@ class NvAPI:
             thermal = NV_GPU_THERMAL_EX()
             thermal.mask = (1 << count) - 1
             try:
-                self.NvAPI_GPU_QueryThermalSensors (dev, ctypes.pointer(thermal))
+                self.NvAPI_GPU_QueryThermalSensors(dev, ctypes.pointer(thermal))
             except NvError as ex:
                 exc = ex
                 continue
