@@ -5,7 +5,7 @@ import typing
 from .nvapi_api import NvAPI, NvPhysicalGpu, NV_GPU_THERMAL_SETTINGS, NVAPI_THERMAL_TARGET_ALL, NVAPI_THERMAL_TARGET_GPU, \
         NvAPI_ShortString, NV_GPU_CLOCK_FREQUENCIES_CURRENT_FREQ, NV_GPU_CLOCK_FREQUENCIES_BASE_CLOCK, NV_GPU_CLOCK_FREQUENCIES_BOOST_CLOCK, \
         NVAPI_GPU_PUBLIC_CLOCK_GRAPHICS, NVAPI_GPU_PUBLIC_CLOCK_MEMORY, NVAPI_GPU_PUBLIC_CLOCK_PROCESSOR, NVAPI_GPU_PUBLIC_CLOCK_VIDEO, \
-        NV_GPU_POWER_STATUS, FAN_COOLER_CONTROL_MODE, PerfCapReason, RamType, PowerRailType, PowerChannelType
+        NV_GPU_POWER_STATUS, FAN_COOLER_CONTROL_MODE, PerfCapReason, PerformanceStateId, RamType, PowerRailType, PowerChannelType
 from .status import NvError
 
 class Delta(typing.NamedTuple):
@@ -268,3 +268,7 @@ class Gpu:
         '''Returns MB of free dedicated memory.'''
         info = self.api.get_memory_info(self.handle)
         return info.currentAvailableDedicatedVideoMemory
+
+    @property
+    def pstate(self) -> PerformanceStateId:
+        return self.api.get_current_pstate(self.handle)
